@@ -1,0 +1,25 @@
+{
+  "globalHeaders": {
+    "cache-control": "no-cache, no-store, must-revalidate"
+  },
+  "routes": [
+    {
+      "route": "/index.html",
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "route": "/*.svg",
+      "headers": {
+        "cache-control": "public, max-age=604800"
+      }
+    },
+    {
+      "route": "/manifest.json",
+      "headers": {
+        "cache-control": "no-cache"
+      }
+    }
+  ]
+}
