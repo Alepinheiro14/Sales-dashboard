@@ -942,11 +942,16 @@ async function findFile(name, folder) {
           console.log(`[findFile] item encontrado por caminho no drive SharePoint:`, d.id);
           return { id: d.id, driveId };
         } catch(e2) { console.warn(`Busca por caminho no drive SharePoint falhou: ${e2.message}`); }
-        // Fallback: busca por nome no drive
+        // Fallback: busca por nome no drive, filtrando pelo caminho da pasta
         try {
           const ds = await graphGet(`/drives/${driveId}/root/search(q='${encodeURIComponent(name)}')`);
-          const item = (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
-          if (item) { console.log(`[findFile] item encontrado por busca no drive:`, item.id); return { id: item.id, driveId }; }
+          console.log(`[findFile] resultados no drive:`, (ds.value||[]).map(i => ({ name: i.name, path: i.parentReference?.path })));
+          const folderLower = cleanFolder.toLowerCase();
+          const item = (ds.value||[]).find(i =>
+            i.name?.toLowerCase() === name.toLowerCase() &&
+            i.parentReference?.path?.toLowerCase().includes(folderLower.split('/').pop())
+          ) || (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
+          if (item) { console.log(`[findFile] item selecionado:`, item.id, item.parentReference?.path); return { id: item.id, driveId }; }
         } catch(e2) { console.warn(`Busca no drive falhou: ${e2.message}`); }
       }
       return { id: hit.resource.id, driveId: driveId || null };
