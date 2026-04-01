@@ -1286,6 +1286,7 @@ async function loadData() {
       cfg.fileVisitas ? findFile(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)) : Promise.resolve(null),
       cfg.fileLeads   ? findFile(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3)) : Promise.resolve(null)
     ]);
+    getSheetNames(fid1).then(names => console.log('[loadData] Abas do arquivo principal:', names));
     const [controle, reservas, perdas] = await Promise.all([
       getSheet(fid1, cfg.sheetControle),
       getSheet(fid1, cfg.sheetReservas),
