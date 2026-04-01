@@ -849,27 +849,40 @@ function applyBranding() {
 }
 
 // ── Auth ─────────────────────────────────────
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 async function signIn() {
   if (CLIENT_ID === "YOUR_CLIENT_ID_HERE") { document.getElementById('login-warn').style.display='block'; return; }
   try {
     await getMsal().handleRedirectPromise();
-    if (!getMsal().getAllAccounts().length) await getMsal().loginPopup({ scopes: SCOPES });
+    if (!getMsal().getAllAccounts().length) {
+      if (isMobile) {
+        await getMsal().loginRedirect({ scopes: SCOPES });
+        return; // página vai recarregar após redirect
+      } else {
+        await getMsal().loginPopup({ scopes: SCOPES });
+      }
+    }
     initDashboard();
   } catch(e) { showError("Erro de autenticação: " + e.message); }
 }
 async function signOut() {
-  try { await getMsal().logoutPopup(); } catch(e) { /* ignore */ }
+  try {
+    if (isMobile) await getMsal().logoutRedirect();
+    else await getMsal().logoutPopup();
+  } catch(e) { /* ignore */ }
   location.reload();
 }
 async function getToken() {
   const a = getMsal().getAllAccounts();
   if (!a.length) throw new Error("Sessão expirada. Clique em Sair e entre novamente.");
   try {
-    // Silent renewal — happens automatically every ~1h without any user interaction
     return (await getMsal().acquireTokenSilent({ scopes: SCOPES, account: a[0] })).accessToken;
   } catch(e) {
-    // Refresh token expired (after ~90 days) — show popup once and resume
     try {
+      if (isMobile) {
+        await getMsal().acquireTokenRedirect({ scopes: SCOPES, account: a[0] });
+        return ''; // página vai recarregar
+      }
       return (await getMsal().acquireTokenPopup({ scopes: SCOPES, account: a[0] })).accessToken;
     } catch(e2) {
       throw new Error("Sessão expirada. Por favor, faça login novamente.");
@@ -2028,8 +2041,8 @@ function initDashboard() {
   applyBranding();
   if (CLIENT_ID==="YOUR_CLIENT_ID_HERE") return;
   try {
-    await getMsal().handleRedirectPromise();
-    if (getMsal().getAllAccounts().length>0) initDashboard();
+    const result = await getMsal().handleRedirectPromise();
+    if (result || getMsal().getAllAccounts().length>0) initDashboard();
   } catch(e) { /* silent */ }
 })();
 </script>
