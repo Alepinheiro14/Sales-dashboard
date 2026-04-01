@@ -929,10 +929,20 @@ async function findFile(name, folder) {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
     });
     const hits = r.value?.[0]?.hitsContainers?.[0]?.hits || [];
-    const hit = hits.find(h => h.resource?.name === name);
+    console.log(`[findFile] Microsoft Search retornou ${hits.length} resultado(s) para "${name}":`, hits.map(h => h.resource?.name));
+    const hit = hits.find(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
     if (hit) return { id: hit.resource.id, driveId: hit.resource.parentReference?.driveId || null };
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
+  }
+  // 4) sharedWithMe — arquivos compartilhados diretamente
+  try {
+    const s = await graphGet('/me/drive/sharedWithMe');
+    const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
+    console.log(`[findFile] sharedWithMe: ${(s.value||[]).length} itens, encontrou:`, f?.name);
+    if (f) return { id: f.remoteItem?.id || f.id, driveId: f.remoteItem?.parentReference?.driveId || null };
+  } catch(e) {
+    console.warn(`sharedWithMe falhou: ${e.message}`);
   }
   throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
 }
