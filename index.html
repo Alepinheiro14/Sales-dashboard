@@ -915,19 +915,37 @@ function driveItemPath(fileRef) {
   }
   return `/me/drive/items/${fileRef}`;
 }
+function isExternalUser() {
+  const accounts = getMsal().getAllAccounts();
+  if (!accounts.length) return false;
+  // Internal users have tenantId matching the app's home tenant (from CLIENT_ID registration)
+  // External/guest users have a different tenantId or homeAccountId contains 'guest'
+  const account = accounts[0];
+  const homeTenantId = account.tenantId;
+  const homeAccountId = account.homeAccountId || '';
+  // Guest accounts have homeAccountId like "userid.tenantid" where tenantid differs from homeTenantId
+  const parts = homeAccountId.split('.');
+  if (parts.length >= 2) {
+    const accountTenant = parts[parts.length - 1];
+    if (accountTenant && accountTenant !== homeTenantId) return true;
+  }
+  return false;
+}
 async function findFile(name, folder) {
   if (!name) return null;
-  // 1) sharedWithMe — funciona para usuários externos (cross-tenant)
-  try {
-    const s = await graphGet('/me/drive/sharedWithMe');
-    const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
-    if (f) {
-      const driveId = f.remoteItem?.parentReference?.driveId || f.parentReference?.driveId || null;
-      const itemId  = f.remoteItem?.id || f.id;
-      return { id: itemId, driveId };
+  // 1) sharedWithMe — apenas para usuários externos (cross-tenant/guest)
+  if (isExternalUser()) {
+    try {
+      const s = await graphGet('/me/drive/sharedWithMe');
+      const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
+      if (f) {
+        const driveId = f.remoteItem?.parentReference?.driveId || f.parentReference?.driveId || null;
+        const itemId  = f.remoteItem?.id || f.id;
+        return { id: itemId, driveId };
+      }
+    } catch(e) {
+      console.warn(`sharedWithMe falhou: ${e.message}`);
     }
-  } catch(e) {
-    console.warn(`sharedWithMe falhou: ${e.message}`);
   }
   // 2) Path-based lookup in personal OneDrive
   if (folder) {
