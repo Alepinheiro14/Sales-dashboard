@@ -985,9 +985,12 @@ async function getSheet(fileId, sheetName) {
       if (matches >= 2) { hdrIdx = i; break; }
     }
     const hdrs = rows[hdrIdx].map(h => nk(String(h)));
-    return rows.slice(hdrIdx + 1).map(row => {
+    console.log(`[getSheet "${sheetName}"] total rows: ${rows.length}, hdrIdx: ${hdrIdx}, headers:`, hdrs.filter(h=>h));
+    const result = rows.slice(hdrIdx + 1).map(row => {
       const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
     });
+    console.log(`[getSheet "${sheetName}"] registros lidos: ${result.length}, primeiro:`, result[0]);
+    return result;
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
 }
 
