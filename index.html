@@ -774,15 +774,20 @@ const doughnutCenterPlugin = {
     const total = chart.config.data.datasets[0].data.reduce((a,b)=>a+b,0);
     const { ctx } = chart;
     const cx = meta.data[0].x, cy = meta.data[0].y;
+    const totalLotes = getCfg().totalLotes || 582;
+    const pct = totalLotes > 0 ? Math.round(total / totalLotes * 100) : 0;
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#191919';
     ctx.font = 'bold 30px Segoe UI, system-ui, sans-serif';
-    ctx.fillText(total, cx, cy - 9);
+    ctx.fillText(total, cx, cy - 18);
     ctx.font = '11px Segoe UI, system-ui, sans-serif';
     ctx.fillStyle = '#7A6E64';
-    ctx.fillText('vendas totais', cx, cy + 14);
+    ctx.fillText('vendas totais', cx, cy + 4);
+    ctx.font = 'bold 13px Segoe UI, system-ui, sans-serif';
+    ctx.fillStyle = '#003621';
+    ctx.fillText(pct + '% do estoque', cx, cy + 22);
     ctx.restore();
   }
 };
