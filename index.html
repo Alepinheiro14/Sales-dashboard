@@ -1298,10 +1298,13 @@ async function loadData() {
   showLoading(true); hideError();
   try {
     const cfg = getCfg();
+    const safeFind = (name, folder) => name
+      ? findFile(name, folder).catch(e => { console.warn(`Arquivo "${name}" não encontrado:`, e.message); return null; })
+      : Promise.resolve(null);
     const [fid1, fid2, fid3] = await Promise.all([
-      findFile(cfg.filename,    effectiveFolder(cfg, cfg.folder1)),
-      cfg.fileVisitas ? findFile(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)) : Promise.resolve(null),
-      cfg.fileLeads   ? findFile(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3)) : Promise.resolve(null)
+      findFile(cfg.filename, effectiveFolder(cfg, cfg.folder1)),
+      safeFind(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)),
+      safeFind(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3))
     ]);
 const [controle, reservas, perdas] = await Promise.all([
       getSheet(fid1, cfg.sheetControle),
