@@ -976,12 +976,13 @@ async function getSheet(fileId, sheetName) {
     const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
     const rows = d.values||[];
     if (rows.length < 2) return [];
-    // Encontra a linha de cabeçalho real — ignora linhas iniciais de logo/título
-    // (considera cabeçalho a primeira linha com pelo menos 3 células não-vazias)
+    // Encontra a linha de cabeçalho real — procura a linha que contém colunas conhecidas
+    const knownCols = ['cliente','corretor','competencia','competência','status','lote','quadra','data','nome','imobiliaria','imobiliária'];
     let hdrIdx = 0;
-    for (let i = 0; i < Math.min(rows.length - 1, 10); i++) {
-      const nonEmpty = rows[i].filter(c => c !== null && c !== undefined && String(c).trim() !== '').length;
-      if (nonEmpty >= 3) { hdrIdx = i; break; }
+    for (let i = 0; i < Math.min(rows.length - 1, 15); i++) {
+      const normalized = rows[i].map(c => nk(String(c ?? '')));
+      const matches = normalized.filter(v => knownCols.includes(v)).length;
+      if (matches >= 2) { hdrIdx = i; break; }
     }
     const hdrs = rows[hdrIdx].map(h => nk(String(h)));
     return rows.slice(hdrIdx + 1).map(row => {
