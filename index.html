@@ -929,7 +929,6 @@ async function findFile(name, folder) {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
     });
     const hits = r.value?.[0]?.hitsContainers?.[0]?.hits || [];
-    console.log(`[findFile] Microsoft Search retornou ${hits.length} resultado(s) para "${name}":`, hits.map(h => h.resource?.name));
     const hit = hits.find(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
     if (hit) {
       const driveId = hit.resource.parentReference?.driveId;
@@ -939,19 +938,17 @@ async function findFile(name, folder) {
         const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
         try {
           const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}/${encodeURIComponent(name)}`);
-          console.log(`[findFile] item encontrado por caminho no drive SharePoint:`, d.id);
           return { id: d.id, driveId };
         } catch(e2) { console.warn(`Busca por caminho no drive SharePoint falhou: ${e2.message}`); }
         // Fallback: busca por nome no drive, filtrando pelo caminho da pasta
         try {
           const ds = await graphGet(`/drives/${driveId}/root/search(q='${encodeURIComponent(name)}')`);
-          console.log(`[findFile] resultados no drive:`, (ds.value||[]).map(i => ({ name: i.name, path: i.parentReference?.path })));
           const folderLower = cleanFolder.toLowerCase();
           const item = (ds.value||[]).find(i =>
             i.name?.toLowerCase() === name.toLowerCase() &&
             i.parentReference?.path?.toLowerCase().includes(folderLower.split('/').pop())
           ) || (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
-          if (item) { console.log(`[findFile] item selecionado:`, item.id, item.parentReference?.path); return { id: item.id, driveId }; }
+          if (item) return { id: item.id, driveId };
         } catch(e2) { console.warn(`Busca no drive falhou: ${e2.message}`); }
       }
       return { id: hit.resource.id, driveId: driveId || null };
@@ -963,7 +960,6 @@ async function findFile(name, folder) {
   try {
     const s = await graphGet('/me/drive/sharedWithMe');
     const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
-    console.log(`[findFile] sharedWithMe: ${(s.value||[]).length} itens, encontrou:`, f?.name);
     if (f) return { id: f.remoteItem?.id || f.id, driveId: f.remoteItem?.parentReference?.driveId || null };
   } catch(e) {
     console.warn(`sharedWithMe falhou: ${e.message}`);
@@ -985,12 +981,9 @@ async function getSheet(fileId, sheetName) {
       if (matches >= 2) { hdrIdx = i; break; }
     }
     const hdrs = rows[hdrIdx].map(h => nk(String(h)));
-    console.log(`[getSheet "${sheetName}"] total rows: ${rows.length}, hdrIdx: ${hdrIdx}, headers:`, hdrs.filter(h=>h));
-    const result = rows.slice(hdrIdx + 1).map(row => {
+    return rows.slice(hdrIdx + 1).map(row => {
       const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
     });
-    console.log(`[getSheet "${sheetName}"] registros lidos: ${result.length}, primeiro:`, result[0]);
-    return result;
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
 }
 
@@ -1310,8 +1303,7 @@ async function loadData() {
       cfg.fileVisitas ? findFile(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)) : Promise.resolve(null),
       cfg.fileLeads   ? findFile(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3)) : Promise.resolve(null)
     ]);
-    getSheetNames(fid1).then(names => console.log('[loadData] Abas do arquivo principal:', names));
-    const [controle, reservas, perdas] = await Promise.all([
+const [controle, reservas, perdas] = await Promise.all([
       getSheet(fid1, cfg.sheetControle),
       getSheet(fid1, cfg.sheetReservas),
       getSheet(fid1, cfg.sheetPerdas)
