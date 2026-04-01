@@ -975,23 +975,26 @@ async function findFile(name, folder) {
     });
     const hits = (r.value?.[0]?.hitsContainers?.[0]?.hits || [])
       .filter(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
+    console.log(`[findFile] Search hits para "${name}":`, hits.map(h => ({ driveId: h.resource.parentReference?.driveId, path: h.resource.parentReference?.path, id: h.resource.id })));
     if (hits.length && folder) {
       const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
       const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
-      // Tenta caminho exato em cada hit — para quando há múltiplas cópias do arquivo
+      console.log(`[findFile] Tentando caminho: "${cleanFolder}" em cada hit`);
       for (const hit of hits) {
         const driveId = hit.resource.parentReference?.driveId;
         if (!driveId) continue;
         try {
           const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}/${encodeURIComponent(name)}`);
+          console.log(`[findFile] Encontrado por caminho no driveId: ${driveId}`);
           return { id: d.id, driveId };
-        } catch(e2) { /* tenta próximo hit */ }
+        } catch(e2) { console.warn(`[findFile] Caminho falhou no driveId ${driveId}: ${e2.message}`); }
       }
     }
     // Fallback: usa primeiro hit disponível
     if (hits.length) {
       const hit = hits[0];
       const driveId = hit.resource.parentReference?.driveId || null;
+      console.warn(`[findFile] Fallback para primeiro hit, driveId: ${driveId}`);
       return { id: hit.resource.id, driveId };
     }
   } catch(e) {
