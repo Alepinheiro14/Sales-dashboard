@@ -904,7 +904,19 @@ function driveItemPath(fileRef) {
 }
 async function findFile(name, folder) {
   if (!name) return null;
-  // 1) Path-based lookup in personal OneDrive
+  // 1) sharedWithMe — funciona para usuários externos (cross-tenant)
+  try {
+    const s = await graphGet('/me/drive/sharedWithMe');
+    const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
+    if (f) {
+      const driveId = f.remoteItem?.parentReference?.driveId || f.parentReference?.driveId || null;
+      const itemId  = f.remoteItem?.id || f.id;
+      return { id: itemId, driveId };
+    }
+  } catch(e) {
+    console.warn(`sharedWithMe falhou: ${e.message}`);
+  }
+  // 2) Path-based lookup in personal OneDrive
   if (folder) {
     const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
@@ -915,7 +927,7 @@ async function findFile(name, folder) {
       console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
     }
   }
-  // 2) Search personal OneDrive
+  // 3) Search personal OneDrive
   try {
     const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
     const f = (d.value||[]).find(f => f.name === name);
@@ -955,14 +967,6 @@ async function findFile(name, folder) {
     }
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
-  }
-  // 4) sharedWithMe — arquivos compartilhados diretamente
-  try {
-    const s = await graphGet('/me/drive/sharedWithMe');
-    const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
-    if (f) return { id: f.remoteItem?.id || f.id, driveId: f.remoteItem?.parentReference?.driveId || null };
-  } catch(e) {
-    console.warn(`sharedWithMe falhou: ${e.message}`);
   }
   throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
 }
