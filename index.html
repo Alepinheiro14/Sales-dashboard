@@ -713,7 +713,7 @@
 // ═══════════════════════════════════════════
 const CLIENT_ID = "74b3a024-97bb-4bb0-89d7-0e59a9ef6dc2";
 const AUTHORITY = "https://login.microsoftonline.com/common";
-const SCOPES    = ["Files.Read", "User.Read"];
+const SCOPES    = ["Files.Read.All", "User.Read", "Sites.Read.All"];
 
 const DEFAULTS = {
   nome:         "Ville de Provence",
@@ -885,30 +885,61 @@ async function graphGet(url) {
   if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(e?.error?.message||`Erro ${res.status}`); }
   return res.json();
 }
+async function graphPost(url, body) {
+  const res = await fetch("https://graph.microsoft.com/v1.0" + url, {
+    method: 'POST',
+    headers: { Authorization: "Bearer " + await getToken(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(e?.error?.message||`Erro ${res.status}`); }
+  return res.json();
+}
+function driveItemPath(fileRef) {
+  if (fileRef && typeof fileRef === 'object') {
+    return fileRef.driveId
+      ? `/drives/${fileRef.driveId}/items/${fileRef.id}`
+      : `/me/drive/items/${fileRef.id}`;
+  }
+  return `/me/drive/items/${fileRef}`;
+}
 async function findFile(name, folder) {
   if (!name) return null;
-  // Path-based lookup — precise and fast when folder is known
+  // 1) Path-based lookup in personal OneDrive
   if (folder) {
     const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    // Each segment must be individually encoded (spaces → %20, etc.) but / kept as separator
     const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
     try {
       const d = await graphGet(`/me/drive/root:/${encodedPath}/${encodeURIComponent(name)}`);
-      return d.id;
+      return { id: d.id, driveId: null };
     } catch(e) {
-      console.warn(`Busca por caminho falhou para "${name}" em "${folder}": ${e.message}. Tentando busca global…`);
+      console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
     }
   }
-  // Fallback: search across all accessible drives (personal OneDrive + SharePoint synced)
-  const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
-  const f = (d.value||[]).find(f => f.name === name);
-  if (!f) throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
-  return f.id;
+  // 2) Search personal OneDrive
+  try {
+    const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
+    const f = (d.value||[]).find(f => f.name === name);
+    if (f) return { id: f.id, driveId: null };
+  } catch(e) {
+    console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
+  }
+  // 3) Microsoft Search API — cobre SharePoint e drives compartilhados
+  try {
+    const r = await graphPost('/search/query', {
+      requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
+    });
+    const hits = r.value?.[0]?.hitsContainers?.[0]?.hits || [];
+    const hit = hits.find(h => h.resource?.name === name);
+    if (hit) return { id: hit.resource.id, driveId: hit.resource.parentReference?.driveId || null };
+  } catch(e) {
+    console.warn(`Microsoft Search falhou: ${e.message}`);
+  }
+  throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
 }
 async function getSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return [];
   try {
-    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
     const rows = d.values||[];
     if (rows.length < 2) return [];
     const hdrs = rows[0].map(h => nk(String(h)));
@@ -921,21 +952,21 @@ async function getSheet(fileId, sheetName) {
 async function getDaySheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
   try {
-    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
     return parseDaySheetRows(d.values || []);
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return { rows: [], counts: null }; }
 }
 async function getLeadSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
   try {
-    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
     return parseLeadSheetRows(d.values || []);
   } catch(e) { console.warn(`Aba leads "${sheetName}":`, e.message); return { rows: [], counts: null }; }
 }
 async function getSheetNames(fileId) {
   if (!fileId) return [];
   try {
-    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets`);
     return (d.value||[]).map(ws => ws.name);
   } catch(e) { console.warn('Erro ao listar abas:', e.message); return []; }
 }
