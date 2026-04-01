@@ -1607,7 +1607,7 @@ function renderVisitKPIs() {
 // ── Chart: Daily visits ───────────────────────
 function renderChartVisitasDia() {
   destroyChart('vis-dia');
-  const now = new Date();
+  const now = mostRecentDataMonth(allData.contagensByDay);
   const entries = Object.entries(allData.contagensByDay)
     .map(([k, c]) => ({ k, d: dateFromDaySheet(k), c }))
     .filter(({ d }) => d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear())
@@ -1632,7 +1632,7 @@ function renderChartVisitasDia() {
 function renderChartVisitasTipo() {
   destroyChart('vis-tipo');
   let totCor=0, totCli=0, totLead=0;
-  const now2 = new Date();
+  const now2 = mostRecentDataMonth(allData.contagensByDay);
   Object.entries(allData.contagensByDay).forEach(([k, c]) => {
     const d = dateFromDaySheet(k);
     if (!d || d.getMonth()!==now2.getMonth() || d.getFullYear()!==now2.getFullYear()) return;
@@ -1753,20 +1753,20 @@ function renderTab3() {
 }
 
 function renderLeadKPIs() {
-  const today = todayDayKey();
-  const now   = new Date();
-  const todayCounts = allData.leadsContagensByDay[today] || null;
-  // Interações hoje = rows in today's sheet where retorno_1 is non-empty
-  const todayRows   = allData.leadsDias[today] || [];
-  const intHoje     = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
-  document.getElementById('kpi-leads-hoje').textContent     = todayCounts?.totalContatos ?? todayRows.length;
+  const now  = mostRecentDataMonth(Object.keys(allData.leadsContagensByDay).length ? allData.leadsContagensByDay : allData.leadsDias);
+  const refKey = Object.keys(allData.leadsDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a))
+    .find(k=>{ const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+  const todayRows = allData.leadsDias[refKey] || [];
+  const intHoje   = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
+  document.getElementById('kpi-leads-hoje').textContent     = (allData.leadsContagensByDay[refKey]?.totalContatos) ?? todayRows.length;
   document.getElementById('kpi-leads-int-hoje').textContent = intHoje;
   let mesCont=0, diasCount=0;
-  Object.entries(allData.leadsContagensByDay).forEach(([k, c]) => {
+  const useCountsMap = Object.keys(allData.leadsContagensByDay).length > 0;
+  const srcMap = useCountsMap ? allData.leadsContagensByDay : Object.fromEntries(Object.entries(allData.leadsDias).map(([k,rows])=>[k,{totalContatos:rows.length}]));
+  Object.entries(srcMap).forEach(([k, c]) => {
     const d = dateFromDaySheet(k);
     if (d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) {
-      mesCont += c.totalContatos ?? 0;
-      diasCount++;
+      mesCont += c.totalContatos ?? 0; diasCount++;
     }
   });
   document.getElementById('kpi-ld-mes').textContent     = mesCont;
@@ -1775,8 +1775,10 @@ function renderLeadKPIs() {
 
 function renderChartLeads7d() {
   destroyChart('leads-7d');
-  const now = new Date();
-  const entries = Object.entries(allData.leadsContagensByDay)
+  const useCountsMap = Object.keys(allData.leadsContagensByDay).length > 0;
+  const srcMap = useCountsMap ? allData.leadsContagensByDay : Object.fromEntries(Object.entries(allData.leadsDias).map(([k,rows])=>[k,{totalContatos:rows.length}]));
+  const now = mostRecentDataMonth(srcMap);
+  const entries = Object.entries(srcMap)
     .map(([k, c]) => ({ d: dateFromDaySheet(k), total: c.totalContatos || 0 }))
     .filter(({ d }) => d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear())
     .sort((a, b) => a.d - b.d);
@@ -1812,13 +1814,22 @@ function renderChartLeads7d() {
 
 function renderChartLeadsOrigem() {
   destroyChart('leads-origem');
-  const now = new Date();
+  const useCountsMap = Object.keys(allData.leadsContagensByDay).length > 0;
+  const now = mostRecentDataMonth(useCountsMap ? allData.leadsContagensByDay : allData.leadsDias);
   const totals = {};
-  Object.entries(allData.leadsContagensByDay).forEach(([k, c]) => {
-    const d = dateFromDaySheet(k);
-    if (!d || d.getMonth()!==now.getMonth() || d.getFullYear()!==now.getFullYear()) return;
-    Object.entries(c.origem || {}).forEach(([src, n]) => { totals[src] = (totals[src]||0) + n; });
-  });
+  if (useCountsMap) {
+    Object.entries(allData.leadsContagensByDay).forEach(([k, c]) => {
+      const d = dateFromDaySheet(k);
+      if (!d || d.getMonth()!==now.getMonth() || d.getFullYear()!==now.getFullYear()) return;
+      Object.entries(c.origem || {}).forEach(([src, n]) => { totals[src] = (totals[src]||0) + n; });
+    });
+  } else {
+    Object.entries(allData.leadsDias).forEach(([k, rows]) => {
+      const d = dateFromDaySheet(k);
+      if (!d || d.getMonth()!==now.getMonth() || d.getFullYear()!==now.getFullYear()) return;
+      rows.forEach(r => { const src = col(r,'origem_do_contato','origem','canal') || 'Outros'; totals[src] = (totals[src]||0) + 1; });
+    });
+  }
   const labels = Object.keys(totals).filter(k => totals[k] > 0 && !k.toLowerCase().includes('whatsapp'));
   const data   = labels.map(k => totals[k]);
   const colors = ['#003621','#7E377B','#B57EDC','#1A5C3A','#B33A2A','#4A7C59','#9B59B6'];
@@ -1892,15 +1903,24 @@ function goTab(id, btn) {
 }
 
 // ── Visitor filter ────────────────────────────
+function mostRecentDataMonth(daysMap) {
+  const now = new Date();
+  const keys = Object.keys(daysMap);
+  if (!keys.length) return now;
+  const hasCurrent = keys.some(k => { const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+  if (hasCurrent) return now;
+  const dates = keys.map(k=>dateFromDaySheet(k)).filter(Boolean).sort((a,b)=>b-a);
+  return dates[0]||now;
+}
 function filterDayKey(key) {
   const d = dateFromDaySheet(key);
   if (!d) return false;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ref   = mostRecentDataMonth(allData.contagensByDay);
+  const today = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
   const dDay  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   if (visitorFilter === 'hoje') return dDay.getTime() === today.getTime();
   if (visitorFilter === '7d')   { const w=new Date(today); w.setDate(w.getDate()-6); return dDay>=w && dDay<=today; }
-  return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+  return d.getMonth()===ref.getMonth() && d.getFullYear()===ref.getFullYear();
 }
 function setVisitorFilter(f, btn) {
   visitorFilter = f;
