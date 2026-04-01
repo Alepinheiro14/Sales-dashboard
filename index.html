@@ -966,35 +966,31 @@ async function findFile(name, folder) {
   } catch(e) {
     console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
   }
-  // 3) Microsoft Search API — cobre SharePoint e drives compartilhados
+  // 3) Microsoft Search API — tenta caminho exato em todos os hits
   try {
     const r = await graphPost('/search/query', {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
     });
-    const hits = r.value?.[0]?.hitsContainers?.[0]?.hits || [];
-    const hit = hits.find(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
-    if (hit) {
-      const driveId = hit.resource.parentReference?.driveId;
-      if (driveId && folder) {
-        // Tenta localizar pelo caminho exato dentro do drive SharePoint
-        const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-        const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
+    const hits = (r.value?.[0]?.hitsContainers?.[0]?.hits || [])
+      .filter(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
+    if (hits.length && folder) {
+      const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
+      // Tenta caminho exato em cada hit — para quando há múltiplas cópias do arquivo
+      for (const hit of hits) {
+        const driveId = hit.resource.parentReference?.driveId;
+        if (!driveId) continue;
         try {
           const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}/${encodeURIComponent(name)}`);
           return { id: d.id, driveId };
-        } catch(e2) { console.warn(`Busca por caminho no drive SharePoint falhou: ${e2.message}`); }
-        // Fallback: busca por nome no drive, filtrando pelo caminho da pasta
-        try {
-          const ds = await graphGet(`/drives/${driveId}/root/search(q='${encodeURIComponent(name)}')`);
-          const folderLower = cleanFolder.toLowerCase();
-          const item = (ds.value||[]).find(i =>
-            i.name?.toLowerCase() === name.toLowerCase() &&
-            i.parentReference?.path?.toLowerCase().includes(folderLower.split('/').pop())
-          ) || (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
-          if (item) return { id: item.id, driveId };
-        } catch(e2) { console.warn(`Busca no drive falhou: ${e2.message}`); }
+        } catch(e2) { /* tenta próximo hit */ }
       }
-      return { id: hit.resource.id, driveId: driveId || null };
+    }
+    // Fallback: usa primeiro hit disponível
+    if (hits.length) {
+      const hit = hits[0];
+      const driveId = hit.resource.parentReference?.driveId || null;
+      return { id: hit.resource.id, driveId };
     }
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
