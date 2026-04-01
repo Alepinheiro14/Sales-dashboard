@@ -1791,8 +1791,12 @@ function renderTab3() {
 
 function renderLeadKPIs() {
   const now  = mostRecentDataMonth(Object.keys(allData.leadsContagensByDay).length ? allData.leadsContagensByDay : allData.leadsDias);
-  const refKey = Object.keys(allData.leadsDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a))
-    .find(k=>{ const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+  // "Hoje" = chave de hoje se existir, senão o dia mais recente do mês
+  const todayKey = todayDayKey();
+  const refKey = allData.leadsDias[todayKey]
+    ? todayKey
+    : Object.keys(allData.leadsDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a))
+        .find(k=>{ const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
   const todayRows = allData.leadsDias[refKey] || [];
   const intHoje   = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
   const contagemHoje = allData.leadsContagensByDay[refKey]?.totalContatos;
