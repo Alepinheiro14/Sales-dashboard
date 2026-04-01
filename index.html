@@ -1080,11 +1080,19 @@ function competenciaToDate(val) {
 }
 function parseDate(val) {
   if (!val&&val!==0) return null;
-  if (val instanceof Date) return val; // SheetJS date object
-  if (typeof val==='number') return new Date(Math.round((val-25569)*86400*1000));
+  if (val instanceof Date) { return new Date(val.getFullYear(), val.getMonth(), val.getDate()); }
+  if (typeof val==='number') {
+    // Excel serial date — add 0.5 to round to noon UTC, avoiding timezone shift
+    const d = new Date(Math.round((val-25569)*86400*1000) + 43200000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
   const s=String(val).trim();
+  // dd/mm/yyyy
   const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (m) return new Date(+m[3],+m[2]-1,+m[1]);
+  // yyyy-mm-dd (ISO) — parse as local to avoid UTC shift
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(+iso[1],+iso[2]-1,+iso[3]);
   const d=new Date(s); return isNaN(d)?null:d;
 }
 function toDateStr(d) { return d?d.toISOString().split('T')[0]:''; }
