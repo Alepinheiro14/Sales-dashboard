@@ -976,8 +976,15 @@ async function getSheet(fileId, sheetName) {
     const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
     const rows = d.values||[];
     if (rows.length < 2) return [];
-    const hdrs = rows[0].map(h => nk(String(h)));
-    return rows.slice(1).map(row => {
+    // Encontra a linha de cabeçalho real — ignora linhas iniciais de logo/título
+    // (considera cabeçalho a primeira linha com pelo menos 3 células não-vazias)
+    let hdrIdx = 0;
+    for (let i = 0; i < Math.min(rows.length - 1, 10); i++) {
+      const nonEmpty = rows[i].filter(c => c !== null && c !== undefined && String(c).trim() !== '').length;
+      if (nonEmpty >= 3) { hdrIdx = i; break; }
+    }
+    const hdrs = rows[hdrIdx].map(h => nk(String(h)));
+    return rows.slice(hdrIdx + 1).map(row => {
       const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
     });
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
