@@ -1,36 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#003621"/>
-
-  <!-- Base stem -->
-  <path d="M256 440 L256 310" stroke="white" stroke-width="14" stroke-linecap="round" fill="none"/>
-
-  <!-- Left branch -->
-  <path d="M256 340 C244 325 228 300 218 260" stroke="white" stroke-width="10" stroke-linecap="round" fill="none"/>
-  <!-- Right branch -->
-  <path d="M256 340 C268 325 284 300 294 260" stroke="white" stroke-width="10" stroke-linecap="round" fill="none"/>
-  <!-- Center stalk -->
-  <path d="M256 310 L256 205" stroke="white" stroke-width="10" stroke-linecap="round" fill="none"/>
-
-  <!-- Center spike buds -->
-  <ellipse cx="256" cy="204" rx="9" ry="14" fill="white"/>
-  <ellipse cx="256" cy="225" rx="9" ry="14" fill="white"/>
-  <ellipse cx="256" cy="246" rx="8" ry="13" fill="white"/>
-  <ellipse cx="256" cy="266" rx="8" ry="12" fill="white"/>
-  <ellipse cx="256" cy="285" rx="7" ry="11" fill="white"/>
-
-  <!-- Left spike buds -->
-  <ellipse cx="218" cy="259" rx="8" ry="13" fill="white" transform="rotate(-25 218 259)"/>
-  <ellipse cx="226" cy="277" rx="8" ry="12" fill="white" transform="rotate(-20 226 277)"/>
-  <ellipse cx="236" cy="294" rx="7" ry="11" fill="white" transform="rotate(-15 236 294)"/>
-  <ellipse cx="246" cy="309" rx="6" ry="10" fill="white" transform="rotate(-8 246 309)"/>
-
-  <!-- Right spike buds -->
-  <ellipse cx="294" cy="259" rx="8" ry="13" fill="white" transform="rotate(25 294 259)"/>
-  <ellipse cx="286" cy="277" rx="8" ry="12" fill="white" transform="rotate(20 286 277)"/>
-  <ellipse cx="276" cy="294" rx="7" ry="11" fill="white" transform="rotate(15 276 294)"/>
-  <ellipse cx="266" cy="309" rx="6" ry="10" fill="white" transform="rotate(8 266 309)"/>
-
-  <!-- Small leaves -->
-  <path d="M256 345 C240 352 232 368 238 382" stroke="white" stroke-width="7" stroke-linecap="round" fill="none"/>
-  <path d="M256 345 C272 352 280 368 274 382" stroke="white" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <text
+    x="256"
+    y="310"
+    text-anchor="middle"
+    font-family="Didot, 'GFS Didot', 'Libre Bodoni', Georgia, serif"
+    font-size="220"
+    font-weight="300"
+    letter-spacing="8"
+    fill="white"
+  >VP</text>
 </svg>
