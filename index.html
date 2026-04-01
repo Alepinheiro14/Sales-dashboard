@@ -931,7 +931,18 @@ async function findFile(name, folder) {
     const hits = r.value?.[0]?.hitsContainers?.[0]?.hits || [];
     console.log(`[findFile] Microsoft Search retornou ${hits.length} resultado(s) para "${name}":`, hits.map(h => h.resource?.name));
     const hit = hits.find(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
-    if (hit) return { id: hit.resource.id, driveId: hit.resource.parentReference?.driveId || null };
+    if (hit) {
+      const driveId = hit.resource.parentReference?.driveId;
+      if (driveId) {
+        // Busca o item diretamente no drive para obter o ID correto
+        try {
+          const ds = await graphGet(`/drives/${driveId}/root/search(q='${encodeURIComponent(name)}')`);
+          const item = (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
+          if (item) { console.log(`[findFile] item encontrado no drive:`, item.id); return { id: item.id, driveId }; }
+        } catch(e2) { console.warn(`Busca no drive falhou: ${e2.message}`); }
+      }
+      return { id: hit.resource.id, driveId: driveId || null };
+    }
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
   }
