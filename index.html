@@ -958,13 +958,15 @@ async function findFile(name, folder) {
       console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
     }
   }
-  // 3) Search personal OneDrive
-  try {
-    const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
-    const f = (d.value||[]).find(f => f.name === name);
-    if (f) return { id: f.id, driveId: null };
-  } catch(e) {
-    console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
+  // 3) Search personal OneDrive — apenas quando não há pasta configurada (evita pegar versão antiga)
+  if (!folder) {
+    try {
+      const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
+      const f = (d.value||[]).find(f => f.name === name);
+      if (f) return { id: f.id, driveId: null };
+    } catch(e) {
+      console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
+    }
   }
   // 3) Microsoft Search API — tenta caminho exato em todos os hits
   try {
