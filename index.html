@@ -933,12 +933,20 @@ async function findFile(name, folder) {
     const hit = hits.find(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
     if (hit) {
       const driveId = hit.resource.parentReference?.driveId;
-      if (driveId) {
-        // Busca o item diretamente no drive para obter o ID correto
+      if (driveId && folder) {
+        // Tenta localizar pelo caminho exato dentro do drive SharePoint
+        const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
+        try {
+          const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}/${encodeURIComponent(name)}`);
+          console.log(`[findFile] item encontrado por caminho no drive SharePoint:`, d.id);
+          return { id: d.id, driveId };
+        } catch(e2) { console.warn(`Busca por caminho no drive SharePoint falhou: ${e2.message}`); }
+        // Fallback: busca por nome no drive
         try {
           const ds = await graphGet(`/drives/${driveId}/root/search(q='${encodeURIComponent(name)}')`);
           const item = (ds.value||[]).find(i => i.name?.toLowerCase() === name.toLowerCase());
-          if (item) { console.log(`[findFile] item encontrado no drive:`, item.id); return { id: item.id, driveId }; }
+          if (item) { console.log(`[findFile] item encontrado por busca no drive:`, item.id); return { id: item.id, driveId }; }
         } catch(e2) { console.warn(`Busca no drive falhou: ${e2.message}`); }
       }
       return { id: hit.resource.id, driveId: driveId || null };
