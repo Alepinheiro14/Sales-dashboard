@@ -1795,7 +1795,8 @@ function renderLeadKPIs() {
     .find(k=>{ const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
   const todayRows = allData.leadsDias[refKey] || [];
   const intHoje   = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
-  document.getElementById('kpi-leads-hoje').textContent     = (allData.leadsContagensByDay[refKey]?.totalContatos) ?? todayRows.length;
+  const contagemHoje = allData.leadsContagensByDay[refKey]?.totalContatos;
+  document.getElementById('kpi-leads-hoje').textContent = (contagemHoje > 0 ? contagemHoje : null) ?? todayRows.length;
   document.getElementById('kpi-leads-int-hoje').textContent = intHoje;
   let mesCont=0, diasCount=0;
   const useCountsMap = Object.keys(allData.leadsContagensByDay).length > 0;
