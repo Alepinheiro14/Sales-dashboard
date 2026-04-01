@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel de Vendas</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg:      #FFF8EE;   /* off white — fundo geral */
+      --header-h: 62px;     /* altura do header — usada pelo sticky tab-nav */
+      --surface: #FFFFFF;   /* superfície dos cards */
+      --s2:      #F5EDE0;   /* hover / fundo secundário */
+      --border:  #E5D9CB;   /* bordas */
+      --green:   #003621;   /* verde — cor principal da marca */
+      --green-d: #002518;   /* verde escuro — botões */
+      --green-l: #1A5C3A;   /* verde médio — hover */
+      --gold:    #7E377B;   /* roxo — cor secundária */
+      --blue:    #B57EDC;   /* lavanda — cor terciária */
+      --red:     #B33A2A;   /* vermelho */
+      --text:    #191919;   /* chumbo — texto principal */
+      --muted:   #7A6E64;   /* texto secundário */
+      --r:       10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+    /* ── Login ── */
+    #login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; background:var(--bg); }
+    .login-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:48px 52px; text-align:center; max-width:400px; width:100%; box-shadow:0 4px 24px rgba(0,54,33,.08); }
+    .login-tag  { font-size:11px; letter-spacing:.22em; color:var(--green); font-weight:700; text-transform:uppercase; margin-bottom:4px; }
+    .login-name { font-size:22px; font-weight:300; letter-spacing:.07em; margin-bottom:6px; color:var(--text); }
+    .login-sub  { font-size:13px; color:var(--muted); margin-bottom:32px; line-height:1.6; }
+    .btn-ms { display:flex; align-items:center; justify-content:center; gap:10px; background:#2f6ef5; color:#fff; border:none; border-radius:9px; padding:13px 20px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-bottom:10px; }
+    .btn-ms:hover { background:#1a55d4; }
+    .btn-local { display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(0,54,33,.06); border:1px solid rgba(0,54,33,.25); color:var(--green); border-radius:9px; padding:11px 20px; font-size:13px; cursor:pointer; width:100%; margin-top:10px; }
+    .btn-local:hover { background:rgba(0,54,33,.12); }
+    .file-divider { display:flex; align-items:center; gap:10px; margin:14px 0 4px; color:var(--muted); font-size:11px; }
+    .file-divider::before,.file-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+    #login-warn { display:none; background:#FEF3C7; border:1px solid #D97706; color:#92400E; padding:10px 14px; border-radius:8px; font-size:12px; margin-top:14px; line-height:1.5; }
+
+    /* ── Loading ── */
+    #loading-screen { display:none; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:14px; background:var(--bg); }
+    .spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── Error ── */
+    #error-banner { display:none; background:#FEE2E2; border:1px solid var(--red); color:#7F1D1D; padding:10px 20px; border-radius:8px; margin:12px 24px; font-size:13px; }
+
+    /* ── Dashboard shell ── */
+    #dashboard { display:none; }
+
+    /* ── Header — verde escuro branded ── */
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--green); position:sticky; top:0; z-index:20; }
+    .h-brand .tag  { font-size:10px; letter-spacing:.18em; color:rgba(255,248,238,.55); font-weight:700; text-transform:uppercase; }
+    .h-brand .name { font-size:17px; font-weight:300; letter-spacing:.05em; color:#FFF8EE; }
+    .h-right { display:flex; align-items:center; gap:10px; }
+    #last-refresh, #next-refresh, #user-name { color:rgba(255,248,238,.6); font-size:12px; }
+    .btn-sm { background:rgba(255,248,238,.1); border:1px solid rgba(255,248,238,.2); color:#FFF8EE; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; }
+    .btn-sm:hover { background:rgba(255,248,238,.2); border-color:rgba(255,248,238,.4); }
+    .btn-primary { background:#FFF8EE; border-color:#FFF8EE; color:var(--green); font-weight:600; }
+    .btn-primary:hover { background:#F5EDE0; border-color:#F5EDE0; }
+
+    /* ── Tab navigation ── */
+    .tab-nav { display:flex; gap:4px; padding:0 24px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:var(--header-h); z-index:19; }
+    .tab-nav-btn {
+      padding:11px 20px; font-size:13px; font-weight:600; cursor:pointer;
+      background:none; border:none; color:var(--muted);
+      border-bottom:2px solid transparent; margin-bottom:-1px;
+      transition:color .15s, border-color .15s;
+    }
+    .tab-nav-btn:hover { color:var(--text); }
+    .tab-nav-btn.active { color:var(--green); border-bottom-color:var(--green); }
+
+    /* ── Tab panels ── */
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    main { padding:22px 24px; }
+
+    /* ── Filter bar ── */
+    .filter-bar { display:flex; align-items:center; gap:6px; margin-bottom:20px; flex-wrap:wrap; }
+    .filter-bar label { color:var(--muted); font-size:12px; margin-right:2px; }
+    .fbtn { background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 14px; font-size:12px; cursor:pointer; }
+    .fbtn:hover { border-color:var(--green); color:var(--text); }
+    .fbtn.active { background:var(--green); border-color:var(--green); color:#FFF8EE; }
+
+    /* ── KPI grid ── */
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+    .kpi-grid.cols3 { grid-template-columns:repeat(3,1fr); }
+    @media(max-width:900px){ .kpi-grid,.kpi-grid.cols3 { grid-template-columns:repeat(2,1fr); } }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+    .kpi-card.green { border-top:3px solid var(--green); }
+    .kpi-card.gold  { border-top:3px solid var(--gold); }
+    .kpi-card.blue  { border-top:3px solid var(--blue); }
+    .kpi-card.red   { border-top:3px solid var(--red); }
+    .kpi-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px; }
+    .kpi-value { font-size:28px; font-weight:700; line-height:1.1; color:var(--text); }
+    .kpi-sub   { font-size:12px; color:var(--muted); margin-top:4px; }
+
+    /* ── Summary box ── */
+    .summary-card {
+      background:var(--surface); border:1px solid var(--border);
+      border-top:3px solid var(--green); border-radius:var(--r);
+      padding:20px 24px; margin-bottom:20px;
+      display:grid; grid-template-columns:1fr auto; gap:24px; align-items:start;
+      box-shadow:0 1px 4px rgba(0,0,0,.04);
+    }
+    @media(max-width:800px){ .summary-card { grid-template-columns:1fr; } }
+    .summary-card h2 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--green); margin-bottom:12px; }
+    .wapp-box {
+      background:var(--bg); border:1px solid var(--border); border-radius:8px;
+      padding:14px 18px; font-size:14px; line-height:1.85; color:var(--muted); font-style:italic;
+    }
+    .wapp-box strong { color:var(--text); font-style:normal; }
+    .visit-tiles { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; min-width:280px; }
+    .vtile { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; text-align:center; }
+    .vtile.span2 { grid-column:span 2; border-color:rgba(0,54,33,.3); }
+    .vtile .val { font-size:30px; font-weight:700; line-height:1; color:var(--text); }
+    .vtile .lbl { font-size:11px; color:var(--muted); margin-top:4px; }
+    .vtile.green .val { color:var(--green); }
+    .vtile.blue  .val { color:var(--blue); }
+    .vtile.gold  .val { color:var(--gold); }
+    .vtile.span2 .val { font-size:36px; color:var(--green); }
+
+    /* ── Charts ── */
+    .charts-row { display:grid; gap:14px; margin-bottom:20px; }
+    .charts-row.two { grid-template-columns:3fr 2fr; }
+    .charts-row.three { grid-template-columns:1fr 1fr 1fr; }
+    @media(max-width:900px){ .charts-row.two,.charts-row.three { grid-template-columns:1fr; } }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+    .card-title { font-size:13px; font-weight:600; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; color:var(--text); }
+    .card-title .sub { font-size:11px; color:var(--muted); font-weight:400; }
+    .chart-wrap { position:relative; height:210px; }
+    .chart-wrap.chart-tall { height:240px; }
+
+    /* ── Tables ── */
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:18px 20px; margin-bottom:20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+    .table-card:last-child { margin-bottom:0; }
+    .tbl-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+    .tbl-header h3 { font-size:13px; font-weight:600; color:var(--text); }
+    .tbl-header .meta { font-size:12px; color:var(--muted); }
+    .tbl-wrap { overflow-x:auto; max-height:360px; overflow-y:auto; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead th { text-align:left; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; white-space:nowrap; }
+    tbody td { padding:9px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr:hover td { background:var(--s2); }
+    .num { text-align:right; }
+    .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+    .pill.f { background:rgba(0,54,33,.1);   color:var(--green); }
+    .pill.a { background:rgba(126,55,123,.1); color:var(--gold); }
+    .pill.r { background:rgba(181,126,220,.15); color:#7B3FAD; }
+    .pill.c { background:rgba(179,58,42,.1);  color:var(--red); }
+    .empty { color:var(--muted); text-align:center; padding:36px; }
+
+    /* ── Config modal ── */
+    #config-modal { display:none; position:fixed; inset:0; background:rgba(25,25,25,.5); z-index:100; align-items:center; justify-content:center; }
+    #config-modal.open { display:flex; }
+    .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:30px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,.15); }
+    .modal-box h2 { font-size:17px; font-weight:600; margin-bottom:4px; color:var(--text); }
+    .modal-box .modal-intro { font-size:13px; color:var(--muted); margin-bottom:18px; }
+    .modal-sep { font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:.08em; margin-top:22px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+    .field-label { display:block; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px; margin-top:12px; }
+    .modal-input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:9px 12px; font-size:13px; outline:none; }
+    .modal-input:focus { border-color:var(--green); box-shadow:0 0 0 2px rgba(0,54,33,.12); }
+    .modal-actions { display:flex; gap:10px; margin-top:22px; }
+
+    /* ── Placeholder ── */
+    .placeholder-card { background:var(--surface); border:1px dashed var(--border); border-radius:var(--r); padding:36px; text-align:center; margin-bottom:20px; }
+    .placeholder-card p { color:var(--muted); font-size:13px; line-height:1.7; }
+    .placeholder-card strong { color:var(--text); }
+
+    /* ── Day selector ── */
+    .day-strip { display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    .day-strip::-webkit-scrollbar { height:4px; }
+    .day-strip::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .day-btn { flex-shrink:0; background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:7px 13px; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .day-btn:hover { border-color:var(--green); color:var(--green); }
+    .day-btn.active { background:var(--green); border-color:var(--green); color:#FFF8EE; }
+    .day-btn.is-today { border-color:var(--green); color:var(--green); font-weight:700; }
+    .day-btn.active.is-today { color:#FFF8EE; }
+
+    /* ── Visit tiles (5-up) ── */
+    .visit-tiles-5 { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; min-width:260px; }
+    .vtile5 { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; text-align:center; }
+    .vtile5.span2 { grid-column:span 2; border-color:rgba(0,54,33,.3); }
+    .vtile5 .val { font-size:26px; font-weight:700; line-height:1; color:var(--text); }
+    .vtile5 .lbl { font-size:11px; color:var(--muted); margin-top:4px; }
+    .vtile5.green .val { color:var(--green); }
+    .vtile5.blue  .val { color:var(--blue); }
+    .vtile5.gold  .val { color:var(--gold); }
+    .vtile5.red   .val { color:var(--red); }
+    .vtile5.span2 .val { font-size:32px; color:var(--green); }
+
+    /* ── Visitas file loader ── */
+    .load-vis-wrap { background:var(--surface); border:1px dashed var(--border); border-radius:var(--r); padding:28px; text-align:center; margin-bottom:20px; }
+    .load-vis-wrap p { color:var(--muted); font-size:13px; margin-bottom:14px; line-height:1.6; }
+
+    /* ── Scroll hint on tables (mobile) ── */
+    .tbl-wrap { position:relative; }
+    .tbl-scroll-hint { display:none; font-size:11px; color:var(--muted); text-align:right; margin-bottom:4px; }
+
+    /* ════════════════════════════════════════
+       MOBILE — tablet (≤768px) e phone (≤480px)
+    ════════════════════════════════════════ */
+
+    /* ── Tablet ── */
+    @media(max-width:768px) {
+      .kpi-grid { grid-template-columns:repeat(2,1fr); }
+      .kpi-grid.cols3 { grid-template-columns:repeat(2,1fr); }
+      .charts-row.two, .charts-row.three { grid-template-columns:1fr; }
+      .summary-card { grid-template-columns:1fr; }
+    }
+
+    /* ── Phone ── */
+    @media(max-width:480px) {
+
+      /* Header: compacto, altura reduzida */
+      :root { --header-h: 52px; }
+      header { padding:8px 14px; }
+      .h-brand .tag  { font-size:9px; }
+      .h-brand .name { font-size:14px; }
+      #last-refresh, #next-refresh { display:none; }
+      #user-name { font-size:11px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .h-right { gap:6px; }
+      .btn-sm { padding:5px 10px; font-size:12px; }
+
+      /* Tab nav: compacto e sem overflow */
+      .tab-nav { padding:0 6px; gap:0; overflow-x:auto; scrollbar-width:none; }
+      .tab-nav::-webkit-scrollbar { display:none; }
+      .tab-nav-btn { padding:10px 14px; font-size:12px; flex-shrink:0; }
+
+      /* Main: menos padding lateral */
+      main { padding:14px 12px; }
+
+      /* Login */
+      .login-card { padding:36px 20px; margin:0 12px; }
+      .login-name { font-size:19px; }
+
+      /* KPIs: 2 colunas, valores menores */
+      .kpi-grid, .kpi-grid.cols3 { grid-template-columns:repeat(2,1fr); gap:10px; }
+      .kpi-card { padding:14px 14px; }
+      .kpi-value { font-size:22px; }
+      .kpi-label { font-size:10px; }
+      .kpi-sub   { font-size:11px; }
+
+      /* Charts: mais baixos */
+      .chart-wrap { height:175px; }
+      .chart-wrap.chart-tall { height:200px; }
+
+      /* Cards: menos padding */
+      .card { padding:14px 14px; }
+      .table-card { padding:14px 12px; }
+
+      /* Summary box */
+      .summary-card { padding:14px 14px; gap:14px; }
+      .wapp-box { font-size:13px; padding:11px 13px; }
+      .visit-tiles { min-width:auto; }
+      .vtile .val  { font-size:24px; }
+      .vtile5 .val { font-size:20px; }
+
+      /* Filter bar: botões maiores (tap target) */
+      .filter-bar { gap:5px; margin-bottom:14px; }
+      .fbtn { padding:8px 12px; font-size:12px; }
+
+      /* Tabelas: fonte menor, horizontal scroll visível */
+      .tbl-wrap { max-height:320px; -webkit-overflow-scrolling:touch; }
+      table { font-size:11px; }
+      thead th { padding:7px 8px; font-size:10px; }
+      tbody td  { padding:8px 8px; }
+      .tbl-scroll-hint { display:block; }
+
+      /* Day strip: botões com tap target adequado */
+      .day-strip { gap:5px; padding:4px 0 12px; }
+      .day-btn   { padding:9px 12px; font-size:12px; min-height:38px; }
+
+      /* Placeholder */
+      .placeholder-card { padding:24px 16px; }
+      .placeholder-card p { font-size:12px; }
+
+      /* Modal: sheet inferior em mobile */
+      #config-modal { align-items:flex-end; }
+      .modal-box {
+        width:100%; max-width:100%; border-radius:18px 18px 0 0;
+        padding:24px 16px 32px; max-height:88vh;
+      }
+      .modal-box h2 { font-size:15px; }
+      .modal-input { font-size:14px; padding:10px 12px; } /* evita zoom no iOS */
+      .modal-actions { flex-direction:column; }
+      .modal-actions .btn-sm { width:100%; padding:11px; text-align:center; font-size:13px; }
+
+      /* Error banner */
+      #error-banner { margin:10px 12px; font-size:12px; }
+    }
+
+    /* ── Telas muito pequenas (≤360px) ── */
+    @media(max-width:360px) {
+      main { padding:12px 10px; }
+      .tab-nav-btn { padding:9px 11px; font-size:11px; }
+      .kpi-value { font-size:19px; }
+      .btn-sm { padding:5px 8px; font-size:11px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-tag" id="login-tag">Ville de Provence</div>
+    <div class="login-name">Painel de Vendas</div>
+    <div class="login-sub">Entre com sua conta Microsoft para carregar os dados do OneDrive.</div>
+    <button class="btn-ms" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      Entrar com Microsoft
+    </button>
+    <div class="file-divider">ou use sua planilha real</div>
+    <button class="btn-local" onclick="document.getElementById('file-input').click()">
+      📂 Carregar planilha local (.xlsx)
+    </button>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="loadLocalFile(event)"/>
+    <div id="login-warn">CLIENT_ID não configurado. Edite o arquivo e preencha CLIENT_ID no início do script.</div>
+  </div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:13px">Carregando dados…</div>
+</div>
+
+<!-- ══ ERROR ══ -->
+<div id="error-banner"></div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="dashboard">
+  <header>
+    <div class="h-brand">
+      <div class="tag" id="h-tag">Ville de Provence</div>
+      <div class="name">Painel de Vendas</div>
+    </div>
+    <div class="h-right">
+      <span id="last-refresh"></span>
+      <span id="next-refresh" style="color:var(--muted);font-size:12px"></span>
+      <span id="user-name"></span>
+      <button class="btn-sm btn-primary" onclick="loadData()">↻ Atualizar</button>
+      <button class="btn-sm" onclick="openConfig()">⚙ Config</button>
+      <button class="btn-sm" onclick="signOut()">Sair</button>
+    </div>
+  </header>
+
+  <!-- Tab navigation -->
+  <nav class="tab-nav">
+    <button class="tab-nav-btn active" onclick="goTab('comercial', this)">Controle Comercial</button>
+    <button class="tab-nav-btn" onclick="goTab('visitas', this)">Visitas</button>
+    <button class="tab-nav-btn" onclick="goTab('leads', this)">Leads</button>
+  </nav>
+
+  <main>
+
+    <!-- ════════════════════════════════════
+         TAB 1 — CONTROLE COMERCIAL
+    ════════════════════════════════════ -->
+    <div id="tab-comercial" class="tab-panel active">
+
+      <div class="filter-bar">
+        <label>Competência:</label>
+        <button class="fbtn active" onclick="setFilter('mes',this)">Este Mês</button>
+        <button class="fbtn" onclick="setFilter('mes_ant',this)">Mês Anterior</button>
+        <button class="fbtn" onclick="setFilter('ano',this)">Este Ano</button>
+        <button class="fbtn" onclick="setFilter('all',this)">Todos</button>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-label">Vendas no Período</div>
+          <div class="kpi-value" id="kpi-count">—</div>
+          <div class="kpi-sub" id="kpi-count-sub">lotes vendidos</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-label">Valor Vendido S/ Comissão</div>
+          <div class="kpi-value" id="kpi-valor">—</div>
+          <div class="kpi-sub" id="kpi-valor-sub">soma do período</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Reservas Ativas</div>
+          <div class="kpi-value" id="kpi-reservas">—</div>
+          <div class="kpi-sub" id="kpi-reservas-sub">em aberto</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Valor em Reserva S/ Com.</div>
+          <div class="kpi-value" id="kpi-valor-res">—</div>
+          <div class="kpi-sub">soma das reservas ativas</div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-row two">
+        <div class="card">
+          <div class="card-title">Vendas por Competência <span class="sub">desde o início</span></div>
+          <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Status das Vendas <span class="sub">total geral</span></div>
+          <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+        </div>
+      </div>
+
+      <!-- CONTROLE table -->
+      <div class="table-card">
+        <div class="tbl-header">
+          <h3>Controle de Vendas</h3>
+          <span class="meta" id="controle-meta"></span>
+        </div>
+        <div class="tbl-scroll-hint">← deslize para ver mais →</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Competência</th><th>Cliente</th><th>Corretor</th><th>Imobiliária</th>
+              <th>Quadra</th><th>Lote</th><th>Status</th><th>Tamanho</th>
+              <th class="num">Valor m²</th><th class="num">Valor C/ Com.</th>
+              <th class="num">Valor S/ Com.</th><th class="num">Sinal</th>
+              <th>Data Sinal</th><th>Data Assinatura</th>
+            </tr></thead>
+            <tbody id="tbody-controle"><tr><td colspan="14" class="empty">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RESERVAS table -->
+      <div class="table-card">
+        <div class="tbl-header">
+          <h3>Reservas Ativas</h3>
+          <span class="meta" id="reservas-meta"></span>
+        </div>
+        <div class="tbl-scroll-hint">← deslize para ver mais →</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Data</th><th>Cliente</th><th>Imobiliária</th><th>Quadra</th><th>Lote</th>
+              <th>Status</th><th>Tamanho</th>
+              <th class="num">Valor m² S/ Com.</th><th class="num">Valor m² C/ Com.</th>
+              <th class="num">Valor C/ Com.</th><th class="num">Valor S/ Com.</th>
+            </tr></thead>
+            <tbody id="tbody-reservas"><tr><td colspan="11" class="empty">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PERDAS table -->
+      <div class="table-card">
+        <div class="tbl-header">
+          <h3>Perdas</h3>
+          <span class="meta" id="perdas-meta"></span>
+        </div>
+        <div class="tbl-scroll-hint">← deslize para ver mais →</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Data</th><th>Cliente</th><th>Imobiliária</th>
+              <th>Quadra</th><th>Lote</th><th>Motivo</th>
+            </tr></thead>
+            <tbody id="tbody-perdas"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /tab-comercial -->
+
+
+    <!-- ════════════════════════════════════
+         TAB 2 — VISITAS & LEADS
+    ════════════════════════════════════ -->
+    <div id="tab-visitas" class="tab-panel">
+
+      <!-- File loader (shown when no visitas data loaded) -->
+      <div id="vis-load-card" class="load-vis-wrap">
+        <p>Carregue o arquivo <strong>controle de visitas</strong> (.xlsx) para visualizar as visitas do mês.<br>
+        O arquivo deve conter abas no formato <strong>DD.MM.AAAA</strong> e uma aba <strong>contagens</strong>.</p>
+        <button class="btn-local" onclick="document.getElementById('vis-file-input').click()">
+          📂 Carregar controle de visitas (.xlsx)
+        </button>
+        <input type="file" id="vis-file-input" accept=".xlsx,.xls" style="display:none" onchange="loadVisitasFileLocal(event)"/>
+      </div>
+
+      <!-- WhatsApp daily summary (hidden until data loaded) -->
+      <div class="summary-card" id="vis-summary-card" style="display:none">
+        <div>
+          <h2 id="summary-title">Fechamento de Hoje</h2>
+          <div class="wapp-box" id="wapp-text">Carregando…</div>
+        </div>
+        <div class="visit-tiles-5">
+          <div class="vtile5 blue"> <div class="val" id="vt-cor">—</div><div class="lbl">Corretores</div></div>
+          <div class="vtile5 green"><div class="val" id="vt-cli">—</div><div class="lbl">Clientes</div></div>
+          <div class="vtile5 gold"> <div class="val" id="vt-lead">—</div><div class="lbl">Visitas de Leads</div></div>
+          <div class="vtile5 green"><div class="val" id="vt-tot">—</div><div class="lbl">Total</div></div>
+        </div>
+      </div>
+
+      <!-- Visit period filter (hidden until data loaded) -->
+      <div id="vis-filter-bar" class="filter-bar" style="display:none">
+        <label>Período:</label>
+        <button class="fbtn active" id="vfbtn-hoje" onclick="setVisitorFilter('hoje',this)">Hoje</button>
+        <button class="fbtn" id="vfbtn-7d"   onclick="setVisitorFilter('7d',this)">Últimos 7 dias</button>
+        <button class="fbtn" id="vfbtn-mes"  onclick="setVisitorFilter('mes',this)">Este mês</button>
+      </div>
+
+      <!-- KPIs (hidden until data loaded) -->
+      <div class="kpi-grid cols3" id="vis-kpis" style="display:none;margin-bottom:20px">
+        <div class="kpi-card green">
+          <div class="kpi-label" id="kpi-vis-mes-lbl">Visitas Hoje</div>
+          <div class="kpi-value" id="kpi-vis-mes">—</div>
+          <div class="kpi-sub" id="kpi-vis-mes-sub">total de visitas</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-label" id="kpi-leads-mes-lbl">Leads Hoje</div>
+          <div class="kpi-value" id="kpi-leads-mes">—</div>
+          <div class="kpi-sub">visitas de leads</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label" id="kpi-cor-mes-lbl">Corretores Hoje</div>
+          <div class="kpi-value" id="kpi-cor-mes">—</div>
+          <div class="kpi-sub">visitas de corretores</div>
+        </div>
+      </div>
+
+      <!-- Charts (hidden until data loaded) -->
+      <div class="charts-row two" id="vis-charts" style="display:none">
+        <div class="card">
+          <div class="card-title">Visitas Diárias <span class="sub" id="chart-vis-label">hoje</span></div>
+          <div class="chart-wrap"><canvas id="chart-visitas-dia"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Visitas por Tipo <span class="sub" id="chart-vis-tipo-label">hoje</span></div>
+          <div class="chart-wrap"><canvas id="chart-visitas-tipo"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Day selector + detail table (hidden until data loaded) -->
+      <div class="table-card" id="vis-detail" style="display:none">
+        <div class="tbl-header">
+          <div>
+            <h3 id="vis-day-title">Visitas do Dia</h3>
+          </div>
+          <span class="meta" id="vis-day-meta"></span>
+        </div>
+        <div class="day-strip" id="day-strip"></div>
+        <div class="tbl-scroll-hint">← deslize para ver mais →</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th>
+              <th>Corretor</th>
+              <th>Cliente</th>
+              <th>Lead</th>
+              <th>Fone</th>
+              <th>E-mail</th>
+              <th>Cidade</th>
+              <th class="num">Reserva</th>
+              <th>Feedback</th>
+            </tr></thead>
+            <tbody id="tbody-vis-dia"><tr><td colspan="9" class="empty">Selecione um dia acima.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /tab-visitas -->
+
+    <!-- ════════════════════════════════════
+         TAB 3 — LEADS
+    ════════════════════════════════════ -->
+    <div id="tab-leads" class="tab-panel">
+
+      <!-- File loader -->
+      <div id="leads-load-card" class="load-vis-wrap">
+        <p>Carregue o arquivo de <strong>controle de leads</strong> (.xlsx) para visualizar os dados.<br>
+        O arquivo deve conter abas no formato <strong>DD.MM.AAAA</strong> com os dados de cada dia.</p>
+        <button class="btn-local" onclick="document.getElementById('leads-file-input').click()">
+          📂 Carregar controle de leads (.xlsx)
+        </button>
+        <input type="file" id="leads-file-input" accept=".xlsx,.xls" style="display:none" onchange="loadLeadsFile(event)"/>
+      </div>
+
+      <!-- KPIs (hidden until data) -->
+      <div class="kpi-grid cols3" id="leads-kpis" style="display:none;margin-bottom:20px">
+        <div class="kpi-card green">
+          <div class="kpi-label">Contatos Hoje</div>
+          <div class="kpi-value" id="kpi-leads-hoje">—</div>
+          <div class="kpi-sub">leads do dia</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Interações Hoje</div>
+          <div class="kpi-value" id="kpi-leads-int-hoje">—</div>
+          <div class="kpi-sub">retornos realizados</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-label">Contatos no Mês</div>
+          <div class="kpi-value" id="kpi-ld-mes">—</div>
+          <div class="kpi-sub" id="kpi-ld-mes-sub">total de leads</div>
+        </div>
+      </div>
+
+      <!-- Charts (hidden until data) -->
+      <div class="charts-row two" id="leads-charts" style="display:none">
+        <div class="card">
+          <div class="card-title">Geração de Leads <span class="sub">este mês · média móvel 7 dias</span></div>
+          <div class="chart-wrap chart-tall"><canvas id="chart-leads-7d"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Origem dos Leads <span class="sub">este mês</span></div>
+          <div class="chart-wrap chart-tall"><canvas id="chart-leads-origem"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Day selector + detail table (hidden until data) -->
+      <div class="table-card" id="leads-detail" style="display:none">
+        <div class="tbl-header">
+          <h3 id="leads-day-title">Leads do Dia</h3>
+          <span class="meta" id="leads-day-meta"></span>
+        </div>
+        <div class="day-strip" id="leads-day-strip"></div>
+        <div class="tbl-scroll-hint">← deslize para ver mais →</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th>
+              <th>Nome</th>
+              <th>Fone</th>
+              <th>E-mail</th>
+              <th>Origem</th>
+              <th>Canal de Retorno</th>
+              <th>Retorno 1</th>
+              <th class="num">Visita</th>
+            </tr></thead>
+            <tbody id="tbody-leads-dia"><tr><td colspan="8" class="empty">Selecione um dia acima.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /tab-leads -->
+
+  </main>
+</div>
+
+<!-- ══ CONFIG MODAL ══ -->
+<div id="config-modal">
+  <div class="modal-box">
+    <h2>⚙ Configuração</h2>
+    <div class="modal-intro">Defina os arquivos Excel e nomes das abas conforme sua planilha no OneDrive.</div>
+
+    <div class="modal-sep">Empreendimento</div>
+    <label class="field-label">Nome exibido no painel</label>
+    <input class="modal-input" type="text" id="cfg-nome" placeholder="Ville de Provence"/>
+    <label class="field-label">Total de lotes</label>
+    <input class="modal-input" type="number" id="cfg-lotes" placeholder="582"/>
+
+    <div class="modal-sep">Horários de Atualização Automática</div>
+    <label class="field-label">Horários do dia <span style="color:var(--muted);font-weight:400">(separados por vírgula, formato HH:MM)</span></label>
+    <input class="modal-input" type="text" id="cfg-times" placeholder="18:00, 18:30, 19:00"/>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.6">
+      O dashboard buscará novos dados nesses horários. Fora deles fica em repouso.
+      O botão <strong>↻ Atualizar</strong> sempre funciona manualmente a qualquer momento.
+    </div>
+
+    <div class="modal-sep">Localização no OneDrive / SharePoint</div>
+    <label class="field-label">Pasta onde estão os arquivos <span style="color:var(--muted);font-weight:400">(caminho relativo ao OneDrive — use / como separador)</span></label>
+    <input class="modal-input" type="text" id="cfg-folder" placeholder="URBAN SQUARE LTDA/Arquivos - 07. COMERCIAL/05. VILLE DE PROVENCE/CONTROLES DIÁRIOS"/>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.6">
+      Copie o caminho local da pasta (ex: <code style="background:var(--s2);padding:1px 4px;border-radius:3px">C:\Users\Você\NomeSite\Pasta\SubPasta</code>),
+      remova a parte <code style="background:var(--s2);padding:1px 4px;border-radius:3px">C:\Users\Você\</code> e substitua <code style="background:var(--s2);padding:1px 4px;border-radius:3px">\</code> por <code style="background:var(--s2);padding:1px 4px;border-radius:3px">/</code>.
+      Se os 3 arquivos estiverem em pastas diferentes, use o campo por arquivo abaixo.
+    </div>
+
+    <div class="modal-sep">Arquivo 1 — Controle Comercial</div>
+    <label class="field-label">Nome do arquivo Excel</label>
+    <input class="modal-input" type="text" id="cfg-file" placeholder="controle comercial.xlsx"/>
+    <label class="field-label">Pasta específica <span style="color:var(--muted);font-weight:400">(deixe vazio para usar a pasta acima)</span></label>
+    <input class="modal-input" type="text" id="cfg-folder-1" placeholder=""/>
+    <label class="field-label">Aba — Controle de Vendas</label>
+    <input class="modal-input" type="text" id="cfg-controle" placeholder="CONTROLE"/>
+    <label class="field-label">Aba — Reservas</label>
+    <input class="modal-input" type="text" id="cfg-reservas" placeholder="RESERVAS"/>
+    <label class="field-label">Aba — Perdas</label>
+    <input class="modal-input" type="text" id="cfg-perdas" placeholder="PERDAS"/>
+
+    <div class="modal-sep">Arquivo 2 — Visitas Diárias</div>
+    <label class="field-label">Nome do arquivo Excel <span style="color:var(--muted);font-weight:400">(abas DD.MM.AAAA detectadas automaticamente)</span></label>
+    <input class="modal-input" type="text" id="cfg-file-vis" placeholder="controle de visitas.xlsx"/>
+    <label class="field-label">Pasta específica <span style="color:var(--muted);font-weight:400">(deixe vazio para usar a pasta acima)</span></label>
+    <input class="modal-input" type="text" id="cfg-folder-2" placeholder=""/>
+
+    <div class="modal-sep">Arquivo 3 — Leads</div>
+    <label class="field-label">Nome do arquivo Excel <span style="color:var(--muted);font-weight:400">(abas DD.MM.AAAA detectadas automaticamente)</span></label>
+    <input class="modal-input" type="text" id="cfg-file-leads" placeholder="controle de leads.xlsx"/>
+    <label class="field-label">Pasta específica <span style="color:var(--muted);font-weight:400">(deixe vazio para usar a pasta acima)</span></label>
+    <input class="modal-input" type="text" id="cfg-folder-3" placeholder=""/>
+
+    <div class="modal-actions">
+      <button class="btn-sm btn-primary" onclick="saveConfig()">Salvar e Recarregar</button>
+      <button class="btn-sm" onclick="closeConfig()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIGURAÇÃO ← edite aqui
+// ═══════════════════════════════════════════
+const CLIENT_ID = "74b3a024-97bb-4bb0-89d7-0e59a9ef6dc2";
+const AUTHORITY = "https://login.microsoftonline.com/common";
+const SCOPES    = ["Files.Read", "User.Read"];
+
+const DEFAULTS = {
+  nome:         "Ville de Provence",
+  totalLotes:   582,
+  refreshTimes: "18:00, 18:30, 19:00",
+  // Pasta compartilhada (usada por todos os arquivos que não tiverem pasta específica)
+  folder:       "",
+  // Arquivo 1
+  filename:     "controle comercial.xlsx",
+  folder1:      "",
+  sheetControle:"CONTROLE",
+  sheetReservas:"RESERVAS",
+  sheetPerdas:  "PERDAS",
+  // Arquivo 2 — abas DD.MM.AAAA auto-detectadas
+  fileVisitas:  "",
+  folder2:      "",
+  // Arquivo 3 — abas DD.MM.AAAA auto-detectadas
+  fileLeads:    "",
+  folder3:      ""
+};
+// ═══════════════════════════════════════════
+
+let _msal = null;
+function getMsal() {
+  if (!_msal) _msal = new msal.PublicClientApplication({
+    auth: { clientId: CLIENT_ID, authority: AUTHORITY,
+            redirectUri: window.location.href.split('?')[0].split('#')[0] },
+    cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false }
+  });
+  return _msal;
+}
+
+let currentFilter = 'mes';
+let visitorFilter = 'hoje';
+let charts = {};
+let allData = { controle:[], reservas:[], perdas:[], visitasDias:{}, contagensByDay:{}, leadsDias:{}, leadsContagensByDay:{} };
+let selectedVisitDay = null;
+let selectedLeadDay  = null;
+let isLocalMode = false; // true when data loaded from local files (skip OneDrive refresh)
+
+// Register datalabels plugin for bar charts
+Chart.register(ChartDataLabels);
+
+// Center-text plugin for donut chart
+const doughnutCenterPlugin = {
+  id: 'doughnutCenter',
+  afterDraw(chart) {
+    if (chart.config.type !== 'doughnut') return;
+    const meta = chart.getDatasetMeta(0);
+    if (!meta || !meta.data || !meta.data[0]) return;
+    const total = chart.config.data.datasets[0].data.reduce((a,b)=>a+b,0);
+    const { ctx } = chart;
+    const cx = meta.data[0].x, cy = meta.data[0].y;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#191919';
+    ctx.font = 'bold 30px Segoe UI, system-ui, sans-serif';
+    ctx.fillText(total, cx, cy - 9);
+    ctx.font = '11px Segoe UI, system-ui, sans-serif';
+    ctx.fillStyle = '#7A6E64';
+    ctx.fillText('vendas totais', cx, cy + 14);
+    ctx.restore();
+  }
+};
+Chart.register(doughnutCenterPlugin);
+
+// ── Config ───────────────────────────────────
+function getCfg() {
+  const folder = localStorage.getItem('cfg_folder') ?? DEFAULTS.folder;
+  return {
+    nome:         localStorage.getItem('cfg_nome')         || DEFAULTS.nome,
+    totalLotes:   parseInt(localStorage.getItem('cfg_lotes')) || DEFAULTS.totalLotes,
+    refreshTimes: localStorage.getItem('cfg_times')        || DEFAULTS.refreshTimes,
+    folder,
+    filename:     localStorage.getItem('cfg_file')       || DEFAULTS.filename,
+    folder1:      localStorage.getItem('cfg_folder_1')   ?? DEFAULTS.folder1,
+    sheetControle:localStorage.getItem('cfg_controle')   || DEFAULTS.sheetControle,
+    sheetReservas:localStorage.getItem('cfg_reservas')   || DEFAULTS.sheetReservas,
+    sheetPerdas:  localStorage.getItem('cfg_perdas')     || DEFAULTS.sheetPerdas,
+    fileVisitas:  localStorage.getItem('cfg_file_vis')   || DEFAULTS.fileVisitas,
+    folder2:      localStorage.getItem('cfg_folder_2')   ?? DEFAULTS.folder2,
+    fileLeads:    localStorage.getItem('cfg_file_leads') || DEFAULTS.fileLeads,
+    folder3:      localStorage.getItem('cfg_folder_3')   ?? DEFAULTS.folder3
+  };
+}
+// Returns the effective folder for each file: file-specific overrides shared
+function effectiveFolder(cfg, fileFolder) {
+  const f = (fileFolder || '').trim() || (cfg.folder || '').trim();
+  return f.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+function openConfig() {
+  const c = getCfg();
+  document.getElementById('cfg-nome').value       = c.nome;
+  document.getElementById('cfg-lotes').value      = c.totalLotes;
+  document.getElementById('cfg-times').value      = c.refreshTimes;
+  document.getElementById('cfg-folder').value     = c.folder;
+  document.getElementById('cfg-file').value       = c.filename;
+  document.getElementById('cfg-folder-1').value   = c.folder1;
+  document.getElementById('cfg-controle').value   = c.sheetControle;
+  document.getElementById('cfg-reservas').value   = c.sheetReservas;
+  document.getElementById('cfg-perdas').value     = c.sheetPerdas;
+  document.getElementById('cfg-file-vis').value   = c.fileVisitas;
+  document.getElementById('cfg-folder-2').value   = c.folder2;
+  document.getElementById('cfg-file-leads').value = c.fileLeads;
+  document.getElementById('cfg-folder-3').value   = c.folder3;
+  document.getElementById('config-modal').classList.add('open');
+}
+function closeConfig() { document.getElementById('config-modal').classList.remove('open'); }
+function saveConfig() {
+  const s = (id, def) => { localStorage.setItem(id, document.getElementById(id.replace('cfg_','cfg-').replace('_','-')).value.trim() || def); };
+  localStorage.setItem('cfg_nome',       document.getElementById('cfg-nome').value.trim()        || DEFAULTS.nome);
+  localStorage.setItem('cfg_lotes',      document.getElementById('cfg-lotes').value               || DEFAULTS.totalLotes);
+  localStorage.setItem('cfg_times',      document.getElementById('cfg-times').value.trim()        || DEFAULTS.refreshTimes);
+  localStorage.setItem('cfg_folder',     document.getElementById('cfg-folder').value.trim());
+  localStorage.setItem('cfg_file',       document.getElementById('cfg-file').value.trim()         || DEFAULTS.filename);
+  localStorage.setItem('cfg_folder_1',   document.getElementById('cfg-folder-1').value.trim());
+  localStorage.setItem('cfg_controle',   document.getElementById('cfg-controle').value.trim()     || DEFAULTS.sheetControle);
+  localStorage.setItem('cfg_reservas',   document.getElementById('cfg-reservas').value.trim()     || DEFAULTS.sheetReservas);
+  localStorage.setItem('cfg_perdas',     document.getElementById('cfg-perdas').value.trim()       || DEFAULTS.sheetPerdas);
+  localStorage.setItem('cfg_file_vis',   document.getElementById('cfg-file-vis').value.trim());
+  localStorage.setItem('cfg_folder_2',   document.getElementById('cfg-folder-2').value.trim());
+  localStorage.setItem('cfg_file_leads', document.getElementById('cfg-file-leads').value.trim());
+  localStorage.setItem('cfg_folder_3',   document.getElementById('cfg-folder-3').value.trim());
+  closeConfig();
+  applyBranding();
+  scheduleNextRefresh();
+  loadData();
+}
+function applyBranding() {
+  const nome = getCfg().nome;
+  ['login-tag','h-tag'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=nome; });
+}
+
+// ── Auth ─────────────────────────────────────
+async function signIn() {
+  if (CLIENT_ID === "YOUR_CLIENT_ID_HERE") { document.getElementById('login-warn').style.display='block'; return; }
+  try {
+    await getMsal().handleRedirectPromise();
+    if (!getMsal().getAllAccounts().length) await getMsal().loginPopup({ scopes: SCOPES });
+    initDashboard();
+  } catch(e) { showError("Erro de autenticação: " + e.message); }
+}
+async function signOut() {
+  try { await getMsal().logoutPopup(); } catch(e) { /* ignore */ }
+  location.reload();
+}
+async function getToken() {
+  const a = getMsal().getAllAccounts();
+  if (!a.length) throw new Error("Sessão expirada. Clique em Sair e entre novamente.");
+  try {
+    // Silent renewal — happens automatically every ~1h without any user interaction
+    return (await getMsal().acquireTokenSilent({ scopes: SCOPES, account: a[0] })).accessToken;
+  } catch(e) {
+    // Refresh token expired (after ~90 days) — show popup once and resume
+    try {
+      return (await getMsal().acquireTokenPopup({ scopes: SCOPES, account: a[0] })).accessToken;
+    } catch(e2) {
+      throw new Error("Sessão expirada. Por favor, faça login novamente.");
+    }
+  }
+}
+
+// ── Graph API ────────────────────────────────
+async function graphGet(url) {
+  const res = await fetch("https://graph.microsoft.com/v1.0" + url, {
+    headers: { Authorization: "Bearer " + await getToken() }
+  });
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(e?.error?.message||`Erro ${res.status}`); }
+  return res.json();
+}
+async function findFile(name, folder) {
+  if (!name) return null;
+  // Path-based lookup — precise and fast when folder is known
+  if (folder) {
+    const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    // Each segment must be individually encoded (spaces → %20, etc.) but / kept as separator
+    const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
+    try {
+      const d = await graphGet(`/me/drive/root:/${encodedPath}/${encodeURIComponent(name)}`);
+      return d.id;
+    } catch(e) {
+      console.warn(`Busca por caminho falhou para "${name}" em "${folder}": ${e.message}. Tentando busca global…`);
+    }
+  }
+  // Fallback: search across all accessible drives (personal OneDrive + SharePoint synced)
+  const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
+  const f = (d.value||[]).find(f => f.name === name);
+  if (!f) throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
+  return f.id;
+}
+async function getSheet(fileId, sheetName) {
+  if (!fileId || !sheetName) return [];
+  try {
+    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const rows = d.values||[];
+    if (rows.length < 2) return [];
+    const hdrs = rows[0].map(h => nk(String(h)));
+    return rows.slice(1).map(row => {
+      const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
+    });
+  } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
+}
+
+async function getDaySheet(fileId, sheetName) {
+  if (!fileId || !sheetName) return { rows: [], counts: null };
+  try {
+    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    return parseDaySheetRows(d.values || []);
+  } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return { rows: [], counts: null }; }
+}
+async function getLeadSheet(fileId, sheetName) {
+  if (!fileId || !sheetName) return { rows: [], counts: null };
+  try {
+    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    return parseLeadSheetRows(d.values || []);
+  } catch(e) { console.warn(`Aba leads "${sheetName}":`, e.message); return { rows: [], counts: null }; }
+}
+async function getSheetNames(fileId) {
+  if (!fileId) return [];
+  try {
+    const d = await graphGet(`/me/drive/items/${fileId}/workbook/worksheets`);
+    return (d.value||[]).map(ws => ws.name);
+  } catch(e) { console.warn('Erro ao listar abas:', e.message); return []; }
+}
+
+// ── Helpers ──────────────────────────────────
+function nk(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\w\s]/g,' ').trim().replace(/\s+/g,'_');
+}
+function col(row, ...variants) {
+  for (const v of variants) { const k=nk(v); if (row[k]!==undefined&&row[k]!=='') return row[k]; }
+  const keys=Object.keys(row);
+  for (const v of variants) { const k=nk(v); const f=keys.find(key=>key.includes(k)||k.includes(key)); if(f&&row[f]!=='') return row[f]; }
+  return '';
+}
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  // Strip currency symbols, whitespace
+  let s = String(v).trim().replace(/R\$\s*/g, '').trim();
+  if (!s) return 0;
+  // Brazilian format: dot = thousands separator, comma = decimal  e.g. "1.622,40"
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+  // Plain format with only dots: "1622.40"
+  return parseFloat(s.replace(/,/g, '')) || 0;
+}
+function competenciaToDate(val) {
+  if (val instanceof Date) return new Date(val.getFullYear(), val.getMonth(), 1); // SheetJS date
+  const s=String(val||'').trim().toLowerCase();
+  const mo={jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+  const m1=s.match(/^([a-z]{3})\/(\d{2,4})$/);
+  if (m1&&mo[m1[1]]!==undefined) { const yr=m1[2].length===2?2000+parseInt(m1[2]):parseInt(m1[2]); return new Date(yr,mo[m1[1]],1); }
+  const m2=s.match(/^(\d{2})\/(\d{4})$/);
+  if (m2) return new Date(parseInt(m2[2]),parseInt(m2[1])-1,1);
+  const d=new Date(val); return isNaN(d)?null:d;
+}
+function parseDate(val) {
+  if (!val&&val!==0) return null;
+  if (val instanceof Date) return val; // SheetJS date object
+  if (typeof val==='number') return new Date(Math.round((val-25569)*86400*1000));
+  const s=String(val).trim();
+  const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(+m[3],+m[2]-1,+m[1]);
+  const d=new Date(s); return isNaN(d)?null:d;
+}
+function toDateStr(d) { return d?d.toISOString().split('T')[0]:''; }
+function todayStr()   { return toDateStr(new Date()); }
+function ptDate(val)  { const d=parseDate(val); return d?d.toLocaleDateString('pt-BR'):(val?String(val):'—'); }
+function fmtBRL(n)    {
+  const v=parseNum(n);
+  if (v>=1_000_000) return 'R$ '+(v/1_000_000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'M';
+  if (v>=1_000)     return 'R$ '+(v/1_000).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})+'K';
+  return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtFull(n) { return 'R$ '+parseNum(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// Rows where competência resolves to year < 2020 are placeholder fillers (jan/00, etc.)
+function isValidComp(row) {
+  const c = col(row,'competencia','competência','mes','mês');
+  if (!c) return false;
+  const d = competenciaToDate(c);
+  return d && d.getFullYear() >= 2020;
+}
+function filterByComp(row) {
+  if (!isValidComp(row)) return false;
+  const c=col(row,'competencia','competência','mes','mês');
+  const d=competenciaToDate(c);
+  const now=new Date();
+  if (currentFilter==='mes') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+  if (currentFilter==='mes_ant') { const p=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getMonth()===p.getMonth()&&d.getFullYear()===p.getFullYear(); }
+  if (currentFilter==='ano') return d.getFullYear()===now.getFullYear();
+  return true;
+}
+function filterByDate(row) {
+  const d=parseDate(col(row,'data','date'));
+  if (!d) return currentFilter==='all';
+  const now=new Date();
+  if (currentFilter==='mes') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+  if (currentFilter==='mes_ant') { const p=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getMonth()===p.getMonth()&&d.getFullYear()===p.getFullYear(); }
+  if (currentFilter==='ano') return d.getFullYear()===now.getFullYear();
+  return true;
+}
+function statusClass(st) {
+  const s=String(st||'').toLowerCase();
+  if (s.includes('final'))  return 'f';
+  if (s.includes('assina')) return 'a';
+  if (s.includes('reserv')) return 'r';
+  return 'c';
+}
+
+// ── Shared SheetJS helper ─────────────────────
+const SHEET_KEYWORDS = ['cliente','corretor','imob','quadra','lote','data','status','valor','tamanho',
+  'competencia','competência','motivo','lead','fone','email','cidade','reserva','feedback',
+  'espontanea','espontânea','proprietario','proprietário','interacao','interação','contagem'];
+function readSheetFromWb(wb, name) {
+  let ws = wb.Sheets[name];
+  if (!ws) {
+    const match = wb.SheetNames.find(n => n.toUpperCase() === name.toUpperCase());
+    ws = match ? wb.Sheets[match] : null;
+  }
+  if (!ws) { console.warn(`Aba "${name}" não encontrada.`); return []; }
+  const allRows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', cellDates:true });
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(allRows.length, 15); i++) {
+    const cells = allRows[i].map(c => String(c||'').toLowerCase().trim());
+    if (cells.filter(c=>c).length >= 2 && cells.some(c => SHEET_KEYWORDS.some(kw => c.includes(kw)))) { headerIdx = i; break; }
+  }
+  const hdrs = allRows[headerIdx].map(h => nk(String(h||'')));
+  return allRows.slice(headerIdx+1).filter(row=>row.some(c=>c!==''&&c!==null&&c!==undefined))
+    .map(row => { const o={}; hdrs.forEach((h,i)=>{if(h) o[h]=row[i]??'';}); return o; });
+}
+
+// ── Day sheet helpers ─────────────────────────
+function isDaySheet(name) { return /^\d{2}\.\d{2}\.\d{4}$/.test(name.trim()); }
+function dateFromDaySheet(name) {
+  const m = name.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1])) : null;
+}
+function todayDayKey() {
+  const n=new Date(); const dd=String(n.getDate()).padStart(2,'0'), mm=String(n.getMonth()+1).padStart(2,'0');
+  return `${dd}.${mm}.${n.getFullYear()}`;
+}
+function getContagensCounts(dayKey) {
+  return allData.contagensByDay[dayKey] || null;
+}
+
+// ── Parse raw 2D rows from a day sheet ───────
+// Left columns → visit rows; right columns (after "Contagens" header) → counts object
+function parseDaySheetRows(rawRows) {
+  const mainKw = ['corretor','cliente','lead','fone','email','cidade','reserva','feedback'];
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const cells = rawRows[i].map(c => String(c||'').toLowerCase().trim());
+    if (cells.filter(Boolean).length >= 3 && cells.some(c => mainKw.some(kw => c.includes(kw)))) { headerIdx = i; break; }
+  }
+  const headerRow = rawRows[headerIdx] || [];
+  // Find where right-side "Contagens" section starts
+  let splitCol = headerRow.length;
+  for (let i = 0; i < headerRow.length; i++) {
+    if (String(headerRow[i]||'').toLowerCase().includes('contag')) { splitCol = i; break; }
+  }
+  const hdrs = headerRow.slice(0, splitCol).map(h => nk(String(h||'')));
+  // Visit rows: only rows with real text data in the left columns (ignore checkbox-only rows)
+  const rows = rawRows.slice(headerIdx + 1).filter(row =>
+    row.slice(0, splitCol).some(c => c !== '' && c !== null && c !== undefined && typeof c !== 'boolean' && String(c).trim() !== '')
+  ).map(row => {
+    const o = {};
+    hdrs.forEach((h, i) => { if (h) o[h] = row[i] ?? ''; });
+    return o;
+  });
+  // Extract counts from right side (label in col i, value in col i+1)
+  const counts = {};
+  for (const row of rawRows) {
+    for (let i = splitCol; i < row.length - 1; i++) {
+      const label = String(row[i]||'').toLowerCase().trim();
+      const val   = row[i + 1];
+      const n     = typeof val === 'number' ? val : parseInt(String(val||''));
+      if (isNaN(n) || n < 0) continue;
+      if (label === 'corretores' || label === 'corretor') counts.corretores = n;
+      else if (label === 'clientes' || label === 'cliente') counts.clientes = n;
+      else if (label === 'lead' || label === 'leads') counts.leads = n;
+      else if (label === 'total') counts.total = n;
+    }
+  }
+  return { rows, counts: Object.keys(counts).length > 0 ? counts : null };
+}
+
+// ── Parse raw 2D rows from a leads day sheet ─
+function parseLeadSheetRows(rawRows) {
+  const mainKw = ['nome','contato','fone','email','origem','canal','retorno','visita'];
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const cells = rawRows[i].map(c => String(c||'').toLowerCase().trim());
+    if (cells.filter(Boolean).length >= 3 && cells.some(c => mainKw.some(kw => c.includes(kw)))) { headerIdx = i; break; }
+  }
+  const headerRow = rawRows[headerIdx] || [];
+  let splitCol = headerRow.length;
+  for (let i = 0; i < headerRow.length; i++) {
+    if (String(headerRow[i]||'').toLowerCase().includes('contag')) { splitCol = i; break; }
+  }
+  // Build headers — handle duplicate "Canal de Retorno" by indexing them
+  const canalCount = {};
+  const hdrs = headerRow.slice(0, splitCol).map(h => {
+    const base = nk(String(h||''));
+    if (!base) return '';
+    canalCount[base] = (canalCount[base]||0) + 1;
+    return canalCount[base] > 1 ? `${base}_${canalCount[base]}` : base;
+  });
+  const rows = rawRows.slice(headerIdx + 1).filter(row =>
+    row.slice(0, splitCol).some(c => c !== '' && c !== null && c !== undefined && typeof c !== 'boolean' && String(c).trim() !== '')
+  ).map(row => {
+    const o = {};
+    hdrs.forEach((h, i) => { if (h) o[h] = row[i] ?? ''; });
+    return o;
+  });
+  // Extract right-side counts: totalContatos, totalVisitas, origem breakdown
+  const origemKw = ['e-mail','facebook','instagram','site','telefone','whatsapp','indicaç','indicac','direct','google','portal'];
+  const counts = { totalContatos: 0, totalVisitas: 0, origem: {} };
+  for (const row of rawRows) {
+    for (let i = splitCol; i < row.length - 1; i++) {
+      const label = String(row[i]||'').trim();
+      const lower = label.toLowerCase();
+      const val   = row[i + 1];
+      const n     = typeof val === 'number' ? val : parseInt(String(val||''));
+      if (isNaN(n)) continue;
+      if (lower.includes('total de contato')) { counts.totalContatos = n; }
+      else if (lower.includes('total de visita')) { counts.totalVisitas = n; }
+      else if (origemKw.some(kw => lower.includes(kw))) { counts.origem[label] = n; }
+    }
+  }
+  return { rows, counts };
+}
+
+// ── Load from local Excel file (SheetJS) ─────
+function loadLocalFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  // Reset input so the same file can be re-selected
+  event.target.value = '';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const cfg = getCfg();
+
+      const readSheet = name => readSheetFromWb(wb, name);
+
+      allData.controle = readSheet(cfg.sheetControle);
+      allData.reservas = readSheet(cfg.sheetReservas);
+      allData.perdas   = readSheet(cfg.sheetPerdas);
+      // visitasDias and contagens loaded separately via Tab 2 file loader
+
+      if (!allData.controle.length && !allData.reservas.length) {
+        alert(`Nenhum dado encontrado.\n\nAbas disponíveis no arquivo:\n${wb.SheetNames.join('\n')}\n\nAbas configuradas:\n• Controle: "${cfg.sheetControle}"\n• Reservas: "${cfg.sheetReservas}"\n• Perdas: "${cfg.sheetPerdas}"\n\nAjuste os nomes em ⚙ Config se necessário.`);
+        return;
+      }
+
+      isLocalMode = true;
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display    = 'block';
+      document.getElementById('user-name').textContent      = `📂 ${file.name}`;
+      applyBranding();
+      renderAll();
+    } catch(err) {
+      alert('Erro ao ler o arquivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Load visitas Excel locally (Tab 2) ────────
+function loadVisitasFileLocal(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
+      // Load all DD.MM.YYYY day sheets — counts are embedded in each sheet's right side
+      allData.visitasDias = {};
+      allData.contagensByDay = {};
+      wb.SheetNames.forEach(name => {
+        if (!isDaySheet(name)) return;
+        const ws = wb.Sheets[name];
+        if (!ws) return;
+        const rawRows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', cellDates:true });
+        const { rows, counts } = parseDaySheetRows(rawRows);
+        allData.visitasDias[name] = rows;
+        if (counts) allData.contagensByDay[name] = counts;
+      });
+      const dayCount = Object.keys(allData.visitasDias).length;
+      if (!dayCount) {
+        alert(`Nenhuma aba de dia encontrada.\n\nAbas disponíveis:\n${wb.SheetNames.join('\n')}\n\nEsperado: abas no formato DD.MM.AAAA (ex: 27.03.2026).`);
+        return;
+      }
+      // Auto-select today or most recent day with data
+      const today = todayDayKey();
+      const dayKeys = Object.keys(allData.visitasDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a));
+      selectedVisitDay = dayKeys.includes(today) ? today : (dayKeys[0]||null);
+      renderTab2();
+    } catch(err) { alert('Erro ao ler arquivo de visitas: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Load ─────────────────────────────────────
+async function loadData() {
+  if (isLocalMode) { renderAll(); return; }
+  showLoading(true); hideError();
+  try {
+    const cfg = getCfg();
+    const [fid1, fid2, fid3] = await Promise.all([
+      findFile(cfg.filename,    effectiveFolder(cfg, cfg.folder1)),
+      cfg.fileVisitas ? findFile(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)) : Promise.resolve(null),
+      cfg.fileLeads   ? findFile(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3)) : Promise.resolve(null)
+    ]);
+    const [controle, reservas, perdas] = await Promise.all([
+      getSheet(fid1, cfg.sheetControle),
+      getSheet(fid1, cfg.sheetReservas),
+      getSheet(fid1, cfg.sheetPerdas)
+    ]);
+    // Load visitas: discover DD.MM.YYYY sheets, extract visits + embedded counts from each
+    let visitasDias = {}, contagensByDay = {};
+    if (fid2) {
+      const sheetNames = await getSheetNames(fid2);
+      const daySheets = sheetNames.filter(isDaySheet);
+      const dayResults = await Promise.all(daySheets.map(n => getDaySheet(fid2, n).then(r => ({ n, r }))));
+      dayResults.forEach(({ n, r }) => {
+        visitasDias[n] = r.rows;
+        if (r.counts) contagensByDay[n] = r.counts;
+      });
+    }
+    // Load leads: same DD.MM.YYYY structure, using parseLeadSheetRows
+    let leadsDias = {}, leadsContagensByDay = {};
+    if (fid3) {
+      const sheetNames = await getSheetNames(fid3);
+      const daySheets = sheetNames.filter(isDaySheet);
+      const dayResults = await Promise.all(daySheets.map(n => getLeadSheet(fid3, n).then(r => ({ n, r }))));
+      dayResults.forEach(({ n, r }) => {
+        leadsDias[n] = r.rows;
+        if (r.counts) leadsContagensByDay[n] = r.counts;
+      });
+    }
+    allData = { controle, reservas, perdas, visitasDias, contagensByDay, leadsDias, leadsContagensByDay };
+    // Auto-select today or most recent day for each tab
+    const today = todayDayKey();
+    const visitKeys = Object.keys(visitasDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a));
+    selectedVisitDay = visitKeys.includes(today) ? today : (visitKeys[0]||null);
+    const leadKeys = Object.keys(leadsDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a));
+    selectedLeadDay = leadKeys.includes(today) ? today : (leadKeys[0]||null);
+    renderAll();
+    document.getElementById('last-refresh').textContent =
+      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) { showError(e.message); }
+  finally { showLoading(false); }
+}
+
+// ── Render all ───────────────────────────────
+function renderAll() {
+  renderKPIs();
+  renderChartMonthly();
+  renderChartStatus();
+  renderTableControle();
+  renderTableReservas();
+  renderTablePerdas();
+  renderTab2();
+  renderTab3();
+}
+function renderTab2() {
+  const hasData = Object.keys(allData.visitasDias).length > 0;
+  document.getElementById('vis-load-card').style.display    = hasData ? 'none' : '';
+  document.getElementById('vis-summary-card').style.display  = hasData ? '' : 'none';
+  document.getElementById('vis-filter-bar').style.display    = hasData ? '' : 'none';
+  document.getElementById('vis-kpis').style.display          = hasData ? '' : 'none';
+  document.getElementById('vis-charts').style.display        = hasData ? '' : 'none';
+  document.getElementById('vis-detail').style.display        = hasData ? '' : 'none';
+  if (!hasData) return;
+  renderSummaryBox();
+  renderVisitKPIs();
+  renderChartVisitasDia();
+  renderChartVisitasTipo();
+  renderDaySelector();
+  renderVisitasDia(selectedVisitDay);
+}
+
+// ── KPIs (Tab 1) ─────────────────────────────
+function renderKPIs() {
+  const { controle, reservas } = allData;
+  const filt  = controle.filter(filterByComp);
+  const count = filt.length;
+  const valor = filt.reduce((s,r) => s + parseNum(col(r,'valor_sem_comissao','valor_sem_comissão','valor s/ comissao','valor s comissao')), 0);
+  const resCount = reservas.length;
+  const resValor = reservas.reduce((s,r) => s + parseNum(col(r,'valor_s_comissao','valor s/ comissão','valor s comissao','valor_s/_comissao')), 0);
+  const lbls = { mes:'este mês', mes_ant:'mês anterior', ano:'este ano', all:'total geral' };
+  document.getElementById('kpi-count').textContent      = count;
+  document.getElementById('kpi-count-sub').textContent  = `lotes — ${lbls[currentFilter]||''}`;
+  document.getElementById('kpi-valor').textContent      = fmtBRL(valor);
+  document.getElementById('kpi-valor-sub').textContent  = lbls[currentFilter]||'';
+  document.getElementById('kpi-reservas').textContent   = resCount;
+  document.getElementById('kpi-reservas-sub').textContent = resCount===1?'reserva ativa':'reservas ativas';
+  document.getElementById('kpi-valor-res').textContent  = fmtBRL(resValor);
+}
+
+// ── Chart: Monthly sales ──────────────────────
+function renderChartMonthly() {
+  destroyChart('monthly');
+  const { controle } = allData;
+  const now = new Date();
+  // Find earliest valid competência in the data
+  let earliest = null;
+  controle.forEach(r => {
+    if (!isValidComp(r)) return;
+    const d = competenciaToDate(col(r,'competencia','competência','mes','mês'));
+    if (d && (!earliest || d < earliest)) earliest = d;
+  });
+  if (!earliest) earliest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const startMonth = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+  const endMonth   = new Date(now.getFullYear(), now.getMonth(), 1);
+  const months = [];
+  for (let d = new Date(startMonth); d <= endMonth; d.setMonth(d.getMonth() + 1)) {
+    months.push({ label: new Date(d).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}), date: new Date(d) });
+  }
+  const mkSeries = (kw, color) => ({
+    label: kw==='final'?'Finalizados':'Assinados',
+    backgroundColor: color, borderRadius: 3, stack: 'a',
+    data: months.map(m => controle.filter(r=>{
+      if (!isValidComp(r)) return false;
+      const d=competenciaToDate(col(r,'competencia','competência','mes','mês'));
+      const st=String(col(r,'status_de_contrato','status','situacao','situação')||'').toLowerCase();
+      return d&&d.getMonth()===m.date.getMonth()&&d.getFullYear()===m.date.getFullYear()&&st.includes(kw);
+    }).length)
+  });
+  const ctx=document.getElementById('chart-monthly').getContext('2d');
+  charts.monthly=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:months.map(m=>m.label), datasets:[mkSeries('final','#003621'),mkSeries('assina','#7E377B')] },
+    options: barOpts(true)
+  });
+}
+
+// ── Chart: Status donut ───────────────────────
+function renderChartStatus() {
+  destroyChart('status');
+  const counts={};
+  allData.controle.filter(isValidComp).forEach(r=>{
+    const s=String(col(r,'status_de_contrato','status','situacao','situação')||'Outro').trim();
+    counts[s]=(counts[s]||0)+1;
+  });
+  const ctx=document.getElementById('chart-status').getContext('2d');
+  charts.status=new Chart(ctx,{
+    type:'doughnut',
+    data:{ labels:Object.keys(counts), datasets:[{data:Object.values(counts),backgroundColor:['#003621','#7E377B','#B57EDC','#B33A2A','#1A5C3A'],borderWidth:0}] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{
+        legend:{position:'bottom',labels:{color:'#7A6E64',font:{size:11},boxWidth:12}},
+        datalabels:{display:false}
+      }
+    }
+  });
+}
+
+// ── Table: CONTROLE ───────────────────────────
+function renderTableControle() {
+  const filt = allData.controle.filter(filterByComp).sort((a,b)=>{
+    const da=competenciaToDate(col(a,'competencia','competência','mes','mês'));
+    const db=competenciaToDate(col(b,'competencia','competência','mes','mês'));
+    return (db||0)-(da||0);
+  });
+  const total = filt.reduce((s,r)=>s+parseNum(col(r,'valor_sem_comissao','valor_sem_comissão','valor s/ comissao')),0);
+  document.getElementById('controle-meta').textContent = `${filt.length} registro${filt.length!==1?'s':''} · Total S/ Com.: ${fmtFull(total)}`;
+  const tbody=document.getElementById('tbody-controle');
+  if (!filt.length) { tbody.innerHTML='<tr><td colspan="14" class="empty">Sem dados no período.</td></tr>'; return; }
+  tbody.innerHTML=filt.map(r=>{
+    const st=col(r,'status_de_contrato','status','situacao','situação')||'—';
+    const tam=col(r,'tamanho','tamanho_lote','area','área');
+    const vm2=parseNum(col(r,'valor_m_s_comissao','valor_m2_s_comissao','valor_m²_(s/_comissão)','valor_m2','valor m2 s comissao','valor/m2'));
+    const vcc=parseNum(col(r,'valor_com_comissao','valor_com_comissão','valor c/ comissao','valor_c/_comissao'));
+    const vsc=parseNum(col(r,'valor_sem_comissao','valor_sem_comissão','valor s/ comissao','valor_s/_comissao'));
+    const sinal=parseNum(col(r,'sinal'));
+    const dSinal=col(r,'data_sinal','data sinal');
+    const dAss  =col(r,'data_assinatura','data assinatura');
+    return `<tr>
+      <td>${col(r,'competencia','competência','mes','mês')||'—'}</td>
+      <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
+      <td>${col(r,'corretor','broker','agente')||'—'}</td>
+      <td>${col(r,'imobiliarias','imobiliária','imobiliaria','agency')||'—'}</td>
+      <td>${col(r,'quadra','block','bloco')||'—'}</td>
+      <td>${col(r,'lote','lot')||'—'}</td>
+      <td><span class="pill ${statusClass(st)}">${st}</span></td>
+      <td>${tam?tam+' m²':'—'}</td>
+      <td class="num">${vm2?fmtFull(vm2):'—'}</td>
+      <td class="num">${vcc?fmtFull(vcc):'—'}</td>
+      <td class="num"><strong>${vsc?fmtFull(vsc):'—'}</strong></td>
+      <td class="num">${sinal?fmtFull(sinal):'—'}</td>
+      <td>${dSinal?ptDate(dSinal):'—'}</td>
+      <td>${dAss?ptDate(dAss):'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Table: RESERVAS ───────────────────────────
+function renderTableReservas() {
+  const { reservas } = allData;
+  const total=reservas.reduce((s,r)=>s+parseNum(col(r,'valor_s_comissao','valor s/ comissão','valor s comissao','valor_s/_comissao')),0);
+  document.getElementById('reservas-meta').textContent=`${reservas.length} reserva${reservas.length!==1?'s':''} · Total S/ Com.: ${fmtFull(total)}`;
+  const tbody=document.getElementById('tbody-reservas');
+  if (!reservas.length) { tbody.innerHTML='<tr><td colspan="11" class="empty">Nenhuma reserva ativa.</td></tr>'; return; }
+  tbody.innerHTML=reservas.map(r=>{
+    const st =col(r,'status','situacao','situação')||'—';
+    const tam=col(r,'tamanho_lotes','tamanho lotes','tamanho','area','área');
+    const vmsc=parseNum(col(r,'valor_metro_sem_comissao','valor/metro_sem_comissao','valor metro sem comissao','valor/metro s/ comissao'));
+    const vmcc=parseNum(col(r,'valor_metro_com_comissao','valor/metro_com_comissao','valor metro com comissao','valor/metro c/ comissao'));
+    const vcc =parseNum(col(r,'valor_c_comissao','valor c/ comissão','valor_c/_comissao','valor c comissao'));
+    const vsc =parseNum(col(r,'valor_s_comissao','valor s/ comissão','valor_s/_comissao','valor s comissao'));
+    const data=col(r,'data','date','data_reserva');
+    return `<tr>
+      <td>${data?ptDate(data):'—'}</td>
+      <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
+      <td>${col(r,'imobiliaria','imobiliária','imobiliarias','agency')||'—'}</td>
+      <td>${col(r,'quadra','block','bloco')||'—'}</td>
+      <td>${col(r,'lote','lot')||'—'}</td>
+      <td><span class="pill ${statusClass(st)}">${st}</span></td>
+      <td>${tam?tam+' m²':'—'}</td>
+      <td class="num">${vmsc?fmtFull(vmsc):'—'}</td>
+      <td class="num">${vmcc?fmtFull(vmcc):'—'}</td>
+      <td class="num">${vcc?fmtFull(vcc):'—'}</td>
+      <td class="num"><strong>${vsc?fmtFull(vsc):'—'}</strong></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Table: PERDAS ─────────────────────────────
+function renderTablePerdas() {
+  const filt=allData.perdas.filter(filterByDate);
+  document.getElementById('perdas-meta').textContent=`${filt.length} perda${filt.length!==1?'s':''} no período`;
+  const tbody=document.getElementById('tbody-perdas');
+  if (!filt.length) { tbody.innerHTML='<tr><td colspan="6" class="empty">Sem perdas no período.</td></tr>'; return; }
+  tbody.innerHTML=filt.map(r=>{
+    const data=col(r,'data','date');
+    const motivo=col(r,'motivo','reason','observacao','observação')||'—';
+    return `<tr>
+      <td>${data?ptDate(data):'—'}</td>
+      <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
+      <td>${col(r,'imob','imobiliaria','imobiliária','agency')||'—'}</td>
+      <td>${col(r,'quadra','block')||'—'}</td>
+      <td>${col(r,'lote','lotes','lot')||'—'}</td>
+      <td style="white-space:normal;max-width:320px">${motivo}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── WhatsApp summary box (Tab 2) ─────────────
+function renderSummaryBox() {
+  const dayKey = selectedVisitDay;
+  const dayDate = dayKey ? dateFromDaySheet(dayKey) : null;
+  const counts = getContagensCounts(dayKey);
+
+  const cor  = counts?.corretores ?? 0;
+  const cli  = counts?.clientes   ?? 0;
+  const lead = counts?.leads      ?? 0;
+  const tot  = counts?.total      ?? (cor + cli);
+
+  document.getElementById('vt-cor').textContent  = cor;
+  document.getElementById('vt-cli').textContent  = cli;
+  document.getElementById('vt-lead').textContent = lead;
+  document.getElementById('vt-tot').textContent  = tot;
+
+  const isToday = dayKey === todayDayKey();
+  const dateLabel = dayDate ? dayDate.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'}) : '—';
+  document.getElementById('summary-title').textContent = isToday
+    ? `Fechamento de Hoje — ${dateLabel}`
+    : `Resumo — ${dateLabel}`;
+
+  const lines = [];
+  if (cor>0)  lines.push(`<strong>${cor}</strong> visita${cor>1?'s':''} de corretor${cor>1?'es':''}`);
+  if (cli>0)  lines.push(`<strong>${cli}</strong> visita${cli>1?'s':''} de cliente${cli>1?'s':''}`);
+  if (lead>0) lines.push(`<strong>${lead}</strong> lead${lead>1?'s':''}`);
+
+  // Month totals (always full month, for context in the wapp message)
+  const now = new Date();
+  let totMes = 0, leadMes = 0;
+  Object.entries(allData.contagensByDay).forEach(([k, c]) => {
+    const d = dateFromDaySheet(k);
+    if (d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) {
+      totMes  += c.total      ?? ((c.corretores??0) + (c.clientes??0));
+      leadMes += c.leads      ?? 0;
+    }
+  });
+
+  document.getElementById('wapp-text').innerHTML = lines.length
+    ? `Boa tarde, segue o fechamento${isToday?' de hoje':''};<br><br>${lines.join(';<br>')}.<br><br>Total do mês: <strong>${totMes}</strong> visita${totMes!==1?'s':''} · <strong>${leadMes}</strong> leads`
+    : (counts ? 'Sem visitas registradas neste dia.' : 'Sem dados de contagens para este dia.');
+}
+
+// ── Visit KPIs (Tab 2) ────────────────────────
+function renderVisitKPIs() {
+  let totVis=0, totLead=0, totCor=0, dayCount=0;
+  Object.entries(allData.contagensByDay).forEach(([k, c]) => {
+    if (!filterDayKey(k)) return;
+    totVis  += c.total      ?? ((c.corretores??0) + (c.clientes??0));
+    totLead += c.leads      ?? 0;
+    totCor  += c.corretores ?? 0;
+    dayCount++;
+  });
+  const lbl = { hoje:'Hoje', '7d':'Últimos 7 Dias', mes:'Este Mês' }[visitorFilter] || '';
+  document.getElementById('kpi-vis-mes-lbl').textContent  = `Visitas — ${lbl}`;
+  document.getElementById('kpi-leads-mes-lbl').textContent= `Leads — ${lbl}`;
+  document.getElementById('kpi-cor-mes-lbl').textContent  = `Corretores — ${lbl}`;
+  document.getElementById('kpi-vis-mes').textContent      = totVis;
+  document.getElementById('kpi-leads-mes').textContent    = totLead;
+  document.getElementById('kpi-cor-mes').textContent      = totCor;
+  document.getElementById('kpi-vis-mes-sub').textContent  = `${dayCount} dia${dayCount!==1?'s':''} registrado${dayCount!==1?'s':''}`;
+}
+
+// ── Chart: Daily visits ───────────────────────
+function renderChartVisitasDia() {
+  destroyChart('vis-dia');
+  const now = new Date();
+  const entries = Object.entries(allData.contagensByDay)
+    .map(([k, c]) => ({ k, d: dateFromDaySheet(k), c }))
+    .filter(({ d }) => d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear())
+    .sort((a, b) => a.d - b.d);
+  document.getElementById('chart-vis-label').textContent = now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const ctx = document.getElementById('chart-visitas-dia').getContext('2d');
+  charts['vis-dia'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: entries.map(({ d }) => String(d.getDate()).padStart(2,'0')),
+      datasets:[
+        {label:'Corretores', data:entries.map(({c})=>c.corretores??0), backgroundColor:'#B57EDC',borderRadius:2,stack:'v'},
+        {label:'Clientes',   data:entries.map(({c})=>c.clientes??0),   backgroundColor:'#003621',borderRadius:2,stack:'v'},
+        {label:'Leads',      data:entries.map(({c})=>c.leads??0),      backgroundColor:'#7E377B',borderRadius:2,stack:'v'}
+      ]
+    },
+    options:barOpts(true)
+  });
+}
+
+// ── Chart: Visit type totals ──────────────────
+function renderChartVisitasTipo() {
+  destroyChart('vis-tipo');
+  let totCor=0, totCli=0, totLead=0;
+  const now2 = new Date();
+  Object.entries(allData.contagensByDay).forEach(([k, c]) => {
+    const d = dateFromDaySheet(k);
+    if (!d || d.getMonth()!==now2.getMonth() || d.getFullYear()!==now2.getFullYear()) return;
+    totCor  += c.corretores ?? 0;
+    totCli  += c.clientes   ?? 0;
+    totLead += c.leads      ?? 0;
+  });
+  document.getElementById('chart-vis-tipo-label').textContent = 'este mês';
+  const ctx=document.getElementById('chart-visitas-tipo').getContext('2d');
+  charts['vis-tipo']=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:['Corretores','Clientes','Leads'], datasets:[{data:[totCor,totCli,totLead],backgroundColor:['#B57EDC','#003621','#7E377B'],borderRadius:4}] },
+    options:{ ...barOpts(false), indexAxis:'y', plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'start',color:'#fff',font:{size:12,weight:'600'},formatter:v=>v>0?v:null,display:ctx=>ctx.dataset.data[ctx.dataIndex]>0}} }
+  });
+}
+
+// ── Day selector (Tab 2) ─────────────────────
+function renderDaySelector() {
+  const strip = document.getElementById('day-strip');
+  const keys = Object.keys(allData.visitasDias).sort((a,b)=>dateFromDaySheet(a)-dateFromDaySheet(b));
+  const today = todayDayKey();
+  strip.innerHTML = keys.map(k => {
+    const d = dateFromDaySheet(k);
+    const label = d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : k;
+    const isToday = k === today;
+    const isActive = k === selectedVisitDay;
+    return `<button class="day-btn${isActive?' active':''}${isToday?' is-today':''}" onclick="selectDay('${k}')">${label}${isToday?' ●':''}</button>`;
+  }).join('');
+}
+function selectDay(key) {
+  selectedVisitDay = key;
+  renderSummaryBox();
+  renderDaySelector();
+  renderVisitasDia(key);
+}
+
+// ── Day detail table (Tab 2) ──────────────────
+function renderVisitasDia(key) {
+  const tbody = document.getElementById('tbody-vis-dia');
+  const meta  = document.getElementById('vis-day-meta');
+  const title = document.getElementById('vis-day-title');
+  if (!key || !allData.visitasDias[key]) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Selecione um dia acima.</td></tr>';
+    meta.textContent = '';
+    title.textContent = 'Visitas do Dia';
+    return;
+  }
+  const rows = allData.visitasDias[key];
+  const d = dateFromDaySheet(key);
+  title.textContent = d ? `Visitas — ${d.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}` : `Visitas — ${key}`;
+  const reservas = rows.filter(r => { const v=col(r,'reserva'); return v===true||v===1||(typeof v==='string'&&['sim','yes','1','true'].includes(v.trim().toLowerCase())); }).length;
+  meta.textContent = `${rows.length} visita${rows.length!==1?'s':''} · ${reservas} reserva${reservas!==1?'s':''}`;
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="9" class="empty">Nenhuma visita registrada neste dia.</td></tr>'; return; }
+  tbody.innerHTML = rows.map((r,i) => {
+    const reserva = col(r,'reserva');
+    const resOk = reserva===true || reserva===1 || (typeof reserva==='string' && ['sim','yes','1','true'].includes(String(reserva).trim().toLowerCase()));
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td>${col(r,'corretor')||'—'}</td>
+      <td>${col(r,'cliente')||'—'}</td>
+      <td>${col(r,'lead')||'—'}</td>
+      <td>${col(r,'fone')||'—'}</td>
+      <td>${col(r,'e_mail','email','e-mail')||'—'}</td>
+      <td>${col(r,'cidade')||'—'}</td>
+      <td class="num">${resOk?'<span class="pill f">Sim</span>':'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="max-width:220px;white-space:normal">${col(r,'feedback')||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Leads file (Tab 3) ───────────────────────
+function loadLeadsFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
+      allData.leadsDias = {};
+      allData.leadsContagensByDay = {};
+      wb.SheetNames.forEach(name => {
+        if (!isDaySheet(name)) return;
+        const ws = wb.Sheets[name];
+        if (!ws) return;
+        const rawRows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', cellDates:true });
+        const { rows, counts } = parseLeadSheetRows(rawRows);
+        allData.leadsDias[name] = rows;
+        if (counts) allData.leadsContagensByDay[name] = counts;
+      });
+      const dayCount = Object.keys(allData.leadsDias).length;
+      if (!dayCount) {
+        alert(`Nenhuma aba de dia encontrada.\n\nAbas disponíveis:\n${wb.SheetNames.join('\n')}\n\nEsperado: abas no formato DD.MM.AAAA (ex: 27.03.2026).`);
+        return;
+      }
+      const today = todayDayKey();
+      const dayKeys = Object.keys(allData.leadsDias).sort((a,b) => dateFromDaySheet(b) - dateFromDaySheet(a));
+      selectedLeadDay = dayKeys.includes(today) ? today : (dayKeys[0] || null);
+      renderTab3();
+    } catch(err) { alert('Erro ao ler arquivo de leads: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Tab 3: Leads ─────────────────────────────
+function renderTab3() {
+  const hasData = Object.keys(allData.leadsDias).length > 0;
+  document.getElementById('leads-load-card').style.display  = hasData ? 'none' : '';
+  document.getElementById('leads-kpis').style.display       = hasData ? '' : 'none';
+  document.getElementById('leads-charts').style.display     = hasData ? '' : 'none';
+  document.getElementById('leads-detail').style.display     = hasData ? '' : 'none';
+  if (!hasData) return;
+  renderLeadKPIs();
+  renderChartLeads7d();
+  renderChartLeadsOrigem();
+  renderLeadDaySelector();
+  renderLeadsDay(selectedLeadDay);
+}
+
+function renderLeadKPIs() {
+  const today = todayDayKey();
+  const now   = new Date();
+  const todayCounts = allData.leadsContagensByDay[today] || null;
+  // Interações hoje = rows in today's sheet where retorno_1 is non-empty
+  const todayRows   = allData.leadsDias[today] || [];
+  const intHoje     = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
+  document.getElementById('kpi-leads-hoje').textContent     = todayCounts?.totalContatos ?? todayRows.length;
+  document.getElementById('kpi-leads-int-hoje').textContent = intHoje;
+  let mesCont=0, diasCount=0;
+  Object.entries(allData.leadsContagensByDay).forEach(([k, c]) => {
+    const d = dateFromDaySheet(k);
+    if (d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) {
+      mesCont += c.totalContatos ?? 0;
+      diasCount++;
+    }
+  });
+  document.getElementById('kpi-ld-mes').textContent     = mesCont;
+  document.getElementById('kpi-ld-mes-sub').textContent = `${diasCount} dias registrados`;
+}
+
+function renderChartLeads7d() {
+  destroyChart('leads-7d');
+  const now = new Date();
+  const entries = Object.entries(allData.leadsContagensByDay)
+    .map(([k, c]) => ({ d: dateFromDaySheet(k), total: c.totalContatos || 0 }))
+    .filter(({ d }) => d && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear())
+    .sort((a, b) => a.d - b.d);
+  // 7-day moving average — only for days up to today, null for future
+  const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+  const ma7 = entries.map((e, idx) => {
+    if (e.d > todayMidnight) return null;
+    const slice = entries.slice(Math.max(0, idx - 6), idx + 1).filter(x => x.d <= todayMidnight);
+    return Math.round(slice.reduce((s, x) => s + x.total, 0) / slice.length * 10) / 10;
+  });
+  const ctx = document.getElementById('chart-leads-7d').getContext('2d');
+  charts['leads-7d'] = new Chart(ctx, {
+    data: {
+      labels: entries.map(({ d }) => String(d.getDate()).padStart(2,'0')),
+      datasets: [
+        { type:'bar',  label:'Contatos',    data: entries.map(e => e.total), backgroundColor:'#003621', borderRadius:3,
+          datalabels:{ color:'#fff', font:{size:10,weight:'600'}, anchor:'center', align:'center', formatter:v=>v>0?v:null, display:ctx=>ctx.dataset.data[ctx.dataIndex]>0 } },
+        { type:'line', label:'Média 7 dias', data: ma7, borderColor:'#7E377B', backgroundColor:'transparent',
+          borderWidth:2, pointRadius:3, pointBackgroundColor:'#7E377B', tension:0.35,
+          datalabels:{ display:false } }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#7A6E64', font:{size:11}, boxWidth:12 } } },
+      scales:{
+        x:{ grid:{ color:'#E5D9CB' }, ticks:{ color:'#7A6E64', font:{size:10} } },
+        y:{ beginAtZero:true, grid:{ color:'#E5D9CB' }, ticks:{ color:'#7A6E64', font:{size:10}, stepSize:1 } }
+      }
+    }
+  });
+}
+
+function renderChartLeadsOrigem() {
+  destroyChart('leads-origem');
+  const now = new Date();
+  const totals = {};
+  Object.entries(allData.leadsContagensByDay).forEach(([k, c]) => {
+    const d = dateFromDaySheet(k);
+    if (!d || d.getMonth()!==now.getMonth() || d.getFullYear()!==now.getFullYear()) return;
+    Object.entries(c.origem || {}).forEach(([src, n]) => { totals[src] = (totals[src]||0) + n; });
+  });
+  const labels = Object.keys(totals).filter(k => totals[k] > 0 && !k.toLowerCase().includes('whatsapp'));
+  const data   = labels.map(k => totals[k]);
+  const colors = ['#003621','#7E377B','#B57EDC','#1A5C3A','#B33A2A','#4A7C59','#9B59B6'];
+  const ctx = document.getElementById('chart-leads-origem').getContext('2d');
+  charts['leads-origem'] = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor: labels.map((_,i) => colors[i % colors.length]), borderRadius:4 }] },
+    options:{ ...barOpts(false), indexAxis:'y',
+      plugins:{ legend:{ display:false },
+        datalabels:{ anchor:'end', align:'start', color:'#fff', font:{size:11,weight:'600'}, formatter:v=>v>0?v:null, display:ctx=>ctx.dataset.data[ctx.dataIndex]>0 } }
+    }
+  });
+}
+
+function renderLeadDaySelector() {
+  const strip = document.getElementById('leads-day-strip');
+  const today = todayDayKey();
+  const keys  = Object.keys(allData.leadsDias).sort((a,b) => dateFromDaySheet(a) - dateFromDaySheet(b));
+  strip.innerHTML = keys.map(k => {
+    const d = dateFromDaySheet(k);
+    const label = d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : k;
+    const isToday  = k === today;
+    const isActive = k === selectedLeadDay;
+    return `<button class="day-btn${isActive?' active':''}${isToday?' is-today':''}" onclick="selectLeadDay('${k}')">${label}${isToday?' ●':''}</button>`;
+  }).join('');
+}
+function selectLeadDay(key) {
+  selectedLeadDay = key;
+  renderLeadDaySelector();
+  renderLeadsDay(key);
+}
+
+function renderLeadsDay(key) {
+  const tbody = document.getElementById('tbody-leads-dia');
+  const meta  = document.getElementById('leads-day-meta');
+  const title = document.getElementById('leads-day-title');
+  if (!key || !allData.leadsDias[key]) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Selecione um dia acima.</td></tr>';
+    meta.textContent = ''; title.textContent = 'Leads do Dia'; return;
+  }
+  const rows = allData.leadsDias[key];
+  const counts = allData.leadsContagensByDay[key] || {};
+  const d = dateFromDaySheet(key);
+  title.textContent = d ? `Leads — ${d.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}` : `Leads — ${key}`;
+  meta.textContent  = `${counts.totalContatos ?? rows.length} contato${(counts.totalContatos??rows.length)!==1?'s':''} · ${counts.totalVisitas ?? 0} visita${(counts.totalVisitas??0)!==1?'s':''}`;
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="8" class="empty">Nenhum lead registrado neste dia.</td></tr>'; return; }
+  tbody.innerHTML = rows.map((r, i) => {
+    const visita = col(r,'visita');
+    const visitaOk = visita===true || visita===1 || (typeof visita==='string' && ['sim','yes','1','true','x'].includes(String(visita).trim().toLowerCase()));
+    const canal   = col(r,'canal_de_retorno') || '—';
+    const retorno = col(r,'retorno_1') || '—';
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td><strong>${col(r,'nome_do_contato','nome','contato') || '—'}</strong></td>
+      <td>${col(r,'fone') || '—'}</td>
+      <td>${col(r,'e_mail','email') || '—'}</td>
+      <td><span class="pill r">${col(r,'origem_do_contato','origem') || '—'}</span></td>
+      <td>${canal}</td>
+      <td>${retorno}</td>
+      <td class="num">${visitaOk ? '<span class="pill f">Sim</span>' : '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Tabs ─────────────────────────────────────
+function goTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ── Visitor filter ────────────────────────────
+function filterDayKey(key) {
+  const d = dateFromDaySheet(key);
+  if (!d) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dDay  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (visitorFilter === 'hoje') return dDay.getTime() === today.getTime();
+  if (visitorFilter === '7d')   { const w=new Date(today); w.setDate(w.getDate()-6); return dDay>=w && dDay<=today; }
+  return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+}
+function setVisitorFilter(f, btn) {
+  visitorFilter = f;
+  document.querySelectorAll('#vis-filter-bar .fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderVisitKPIs();
+}
+
+// ── Filter ────────────────────────────────────
+function setFilter(f, btn) {
+  currentFilter=f;
+  document.querySelectorAll('#tab-comercial .fbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAll();
+}
+
+// ── Chart options ─────────────────────────────
+function barOpts(stacked) {
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{color:'#7A6E64',font:{size:11},boxWidth:12}},
+      datalabels:{
+        color:'#fff',
+        font:{size:11,weight:'600'},
+        anchor:'center',
+        align:'center',
+        formatter: v => v > 0 ? v : null,
+        display: ctx => ctx.dataset.data[ctx.dataIndex] > 0
+      }
+    },
+    scales:{
+      x:{stacked,grid:{color:'#E5D9CB'},ticks:{color:'#7A6E64',font:{size:10}}},
+      y:{stacked,beginAtZero:true,grid:{color:'#E5D9CB'},ticks:{color:'#7A6E64',font:{size:10},stepSize:1}}
+    }
+  };
+}
+function destroyChart(id) { if(charts[id]){charts[id].destroy();delete charts[id];} }
+
+// ── UI ────────────────────────────────────────
+function showLoading(on) {
+  document.getElementById('loading-screen').style.display=on?'flex':'none';
+  document.getElementById('dashboard').style.display=on?'none':'block';
+}
+function showError(msg) { const el=document.getElementById('error-banner'); el.textContent='⚠ '+msg; el.style.display='block'; }
+function hideError() { document.getElementById('error-banner').style.display='none'; }
+let _refreshTimer = null;
+
+function parseRefreshTimes(str) {
+  // Parse "18:00, 18:30, 19:00" into sorted [{h, m}] objects
+  return (str || '')
+    .split(',')
+    .map(s => s.trim().match(/^(\d{1,2}):(\d{2})$/))
+    .filter(Boolean)
+    .map(m => ({ h: parseInt(m[1]), m: parseInt(m[2]) }))
+    .sort((a, b) => a.h*60+a.m - (b.h*60+b.m));
+}
+
+function scheduleNextRefresh() {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+  const times = parseRefreshTimes(getCfg().refreshTimes);
+  if (!times.length) return;
+
+  const now   = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+
+  // Find the next scheduled time today, or roll over to tomorrow's first
+  let next = times.find(t => t.h*60 + t.m > nowMin);
+  let msUntil;
+  if (next) {
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), next.h, next.m, 0, 0);
+    msUntil = target - now;
+    document.getElementById('next-refresh').textContent =
+      `· próx. atualização ${String(next.h).padStart(2,'0')}:${String(next.m).padStart(2,'0')}`;
+  } else {
+    // All times passed today — schedule for first time tomorrow
+    next = times[0];
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, next.h, next.m, 0, 0);
+    msUntil = tomorrow - now;
+    document.getElementById('next-refresh').textContent =
+      `· próx. atualização amanhã ${String(next.h).padStart(2,'0')}:${String(next.m).padStart(2,'0')}`;
+  }
+
+  _refreshTimer = setTimeout(async () => {
+    await loadData();
+    scheduleNextRefresh(); // schedule the one after
+  }, msUntil);
+}
+
+function initDashboard() {
+  const a=getMsal().getAllAccounts();
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  if (a.length) document.getElementById('user-name').textContent=a[0].name||a[0].username;
+  applyBranding(); loadData();
+  scheduleNextRefresh();
+}
+
+// ── Init ──────────────────────────────────────
+(async()=>{
+  applyBranding();
+  if (CLIENT_ID==="YOUR_CLIENT_ID_HERE") return;
+  try {
+    await getMsal().handleRedirectPromise();
+    if (getMsal().getAllAccounts().length>0) initDashboard();
+  } catch(e) { /* silent */ }
+})();
+</script>
+</body>
+</html>
