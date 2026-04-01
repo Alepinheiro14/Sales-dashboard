@@ -856,10 +856,10 @@ async function signIn() {
     await getMsal().handleRedirectPromise();
     if (!getMsal().getAllAccounts().length) {
       if (isMobile) {
-        await getMsal().loginRedirect({ scopes: SCOPES });
+        await getMsal().loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
         return; // página vai recarregar após redirect
       } else {
-        await getMsal().loginPopup({ scopes: SCOPES });
+        await getMsal().loginPopup({ scopes: SCOPES, prompt: 'select_account' });
       }
     }
     initDashboard();
