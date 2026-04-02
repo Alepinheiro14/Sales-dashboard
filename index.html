@@ -720,9 +720,9 @@
 // ═══════════════════════════════════════════
 const CLIENT_ID = "74b3a024-97bb-4bb0-89d7-0e59a9ef6dc2";
 const AUTHORITY = "https://login.microsoftonline.com/common";
-const SCOPES_INTERNAL = ["Files.Read.All", "User.Read"];
+const SCOPES_INTERNAL = ["Files.Read", "User.Read"];
 const SCOPES_EXTERNAL = ["Files.Read", "User.Read"];
-const SCOPES = SCOPES_INTERNAL; // replaced at login based on user type
+const SCOPES = SCOPES_INTERNAL;
 
 const DEFAULTS = {
   nome:         "Ville de Provence",
@@ -876,22 +876,12 @@ async function signIn() {
   try {
     await getMsal().handleRedirectPromise();
     if (!getMsal().getAllAccounts().length) {
-      // Try with Files.Read.All first; if admin consent required, fall back to Files.Read
-      const tryLogin = async (scopes) => {
-        if (isMobile) {
-          await getMsal().loginRedirect({ scopes, prompt: 'select_account' });
-        } else {
-          await getMsal().loginPopup({ scopes, prompt: 'select_account' });
-        }
-      };
-      try {
-        await tryLogin(SCOPES_INTERNAL);
-      } catch(e) {
-        if (e.message?.includes('admin') || e.errorCode === 'interaction_required' || e.message?.includes('AADSTS')) {
-          await tryLogin(SCOPES_EXTERNAL);
-        } else { throw e; }
+      if (isMobile) {
+        await getMsal().loginRedirect({ scopes: SCOPES_EXTERNAL, prompt: 'select_account' });
+        return;
+      } else {
+        await getMsal().loginPopup({ scopes: SCOPES_EXTERNAL, prompt: 'select_account' });
       }
-      if (isMobile) return; // página vai recarregar após redirect
     }
     initDashboard();
   } catch(e) { showError("Erro de autenticação: " + e.message); }
