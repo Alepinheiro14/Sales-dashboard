@@ -961,21 +961,7 @@ function isExternalUser() {
 }
 async function findFile(name, folder) {
   if (!name) return null;
-  // 1) sharedWithMe — apenas para usuários externos (cross-tenant/guest)
-  if (isExternalUser()) {
-    try {
-      const s = await graphGet('/me/drive/sharedWithMe');
-      const f = (s.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
-      if (f) {
-        const driveId = f.remoteItem?.parentReference?.driveId || f.parentReference?.driveId || null;
-        const itemId  = f.remoteItem?.id || f.id;
-        return { id: itemId, driveId };
-      }
-    } catch(e) {
-      console.warn(`sharedWithMe falhou: ${e.message}`);
-    }
-  }
-  // 2) Path-based lookup in personal OneDrive
+  // 1) Path-based lookup — tenta caminho direto no OneDrive/SharePoint do usuário
   if (folder) {
     const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
@@ -986,7 +972,7 @@ async function findFile(name, folder) {
       console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
     }
   }
-  // 3) Search personal OneDrive — apenas quando não há pasta configurada (evita pegar versão antiga)
+  // 2) Search personal OneDrive — apenas quando não há pasta configurada
   if (!folder) {
     try {
       const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
@@ -996,10 +982,7 @@ async function findFile(name, folder) {
       console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
     }
   }
-  // 3) Microsoft Search API — não suportado para contas pessoais (MSA)
-  if (isMSAUser()) {
-    throw new Error(`Arquivo "${name}" não encontrado. Verifique se o arquivo foi compartilhado diretamente com sua conta.`);
-  }
+  // 3) Microsoft Search API — busca no SharePoint do tenant (funciona para todos autenticados pelo tenant Urban Square)
   try {
     const r = await graphPost('/search/query', {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
