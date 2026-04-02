@@ -934,15 +934,21 @@ function driveItemPath(fileRef) {
   }
   return `/me/drive/items/${fileRef}`;
 }
-function isExternalUser() {
+const MSA_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad'; // Microsoft personal accounts tenant
+function isMSAUser() {
   const accounts = getMsal().getAllAccounts();
   if (!accounts.length) return false;
-  // Internal users have tenantId matching the app's home tenant (from CLIENT_ID registration)
-  // External/guest users have a different tenantId or homeAccountId contains 'guest'
+  const account = accounts[0];
+  return account.tenantId === MSA_TENANT ||
+    (account.homeAccountId || '').includes(MSA_TENANT);
+}
+function isExternalUser() {
+  if (isMSAUser()) return true;
+  const accounts = getMsal().getAllAccounts();
+  if (!accounts.length) return false;
   const account = accounts[0];
   const homeTenantId = account.tenantId;
   const homeAccountId = account.homeAccountId || '';
-  // Guest accounts have homeAccountId like "userid.tenantid" where tenantid differs from homeTenantId
   const parts = homeAccountId.split('.');
   if (parts.length >= 2) {
     const accountTenant = parts[parts.length - 1];
@@ -987,7 +993,10 @@ async function findFile(name, folder) {
       console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
     }
   }
-  // 3) Microsoft Search API — tenta caminho exato em todos os hits
+  // 3) Microsoft Search API — não suportado para contas pessoais (MSA)
+  if (isMSAUser()) {
+    throw new Error(`Arquivo "${name}" não encontrado. Verifique se o arquivo foi compartilhado diretamente com sua conta.`);
+  }
   try {
     const r = await graphPost('/search/query', {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
