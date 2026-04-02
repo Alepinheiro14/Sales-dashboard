@@ -722,6 +722,8 @@ const CLIENT_ID = "74b3a024-97bb-4bb0-89d7-0e59a9ef6dc2";
 const AUTHORITY = "https://login.microsoftonline.com/db8e9ec0-c54c-4dae-8641-91786f6850ea";
 const SCOPES_INTERNAL = ["Files.Read.All", "User.Read"];
 const SCOPES_EXTERNAL = ["Files.Read.All", "User.Read"];
+const SP_HOSTNAME = "urbansquarearquivos.sharepoint.com";
+const SP_BASE_PATH = "Documentos Compartilhados";
 const SCOPES = SCOPES_INTERNAL;
 
 const DEFAULTS = {
@@ -959,9 +961,35 @@ function isExternalUser() {
   }
   return false;
 }
+let _spSiteId = null;
+let _spDriveId = null;
+async function getSpDrive() {
+  if (_spDriveId) return { siteId: _spSiteId, driveId: _spDriveId };
+  try {
+    const site = await graphGet(`/sites/${SP_HOSTNAME}:/?$select=id`);
+    _spSiteId = site.id;
+    const drives = await graphGet(`/sites/${_spSiteId}/drives`);
+    const drive = (drives.value||[]).find(d => d.name === 'Documentos' || d.name === 'Documents' || d.webUrl?.includes('Documentos')) || drives.value?.[0];
+    _spDriveId = drive?.id || null;
+  } catch(e) { console.warn('getSpDrive falhou:', e.message); }
+  return { siteId: _spSiteId, driveId: _spDriveId };
+}
 async function findFile(name, folder) {
   if (!name) return null;
-  // 1) Path-based lookup — tenta caminho direto no OneDrive/SharePoint do usuário
+  // 1) SharePoint direto pelo site — funciona para todos com acesso à pasta
+  try {
+    const { driveId } = await getSpDrive();
+    if (driveId && folder) {
+      const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      const fullPath = `${SP_BASE_PATH}/${cleanFolder}/${name}`;
+      const encodedPath = fullPath.split('/').map(s => encodeURIComponent(s)).join('/');
+      const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}`);
+      return { id: d.id, driveId };
+    }
+  } catch(e) {
+    console.warn(`Busca SharePoint direto falhou: ${e.message}`);
+  }
+  // 2) Path-based lookup no OneDrive pessoal
   if (folder) {
     const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
@@ -972,17 +1000,7 @@ async function findFile(name, folder) {
       console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
     }
   }
-  // 2) Search personal OneDrive — apenas quando não há pasta configurada
-  if (!folder) {
-    try {
-      const d = await graphGet(`/me/drive/root/search(q='${encodeURIComponent(name)}')`);
-      const f = (d.value||[]).find(f => f.name === name);
-      if (f) return { id: f.id, driveId: null };
-    } catch(e) {
-      console.warn(`Busca OneDrive pessoal falhou: ${e.message}`);
-    }
-  }
-  // 3) Microsoft Search API — busca no SharePoint do tenant (funciona para todos autenticados pelo tenant Urban Square)
+  // 3) Microsoft Search API
   try {
     const r = await graphPost('/search/query', {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
