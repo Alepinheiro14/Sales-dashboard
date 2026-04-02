@@ -961,46 +961,34 @@ function isExternalUser() {
   }
   return false;
 }
-let _spSiteId = null;
-let _spDriveId = null;
-async function getSpDrive() {
-  if (_spDriveId) return { siteId: _spSiteId, driveId: _spDriveId };
-  try {
-    const site = await graphGet(`/sites/${SP_HOSTNAME}:/?$select=id`);
-    _spSiteId = site.id;
-    const drives = await graphGet(`/sites/${_spSiteId}/drives`);
-    const drive = (drives.value||[]).find(d => d.name === 'Documentos' || d.name === 'Documents' || d.webUrl?.includes('Documentos')) || drives.value?.[0];
-    _spDriveId = drive?.id || null;
-  } catch(e) { console.warn('getSpDrive falhou:', e.message); }
-  return { siteId: _spSiteId, driveId: _spDriveId };
-}
 async function findFile(name, folder) {
   if (!name) return null;
-  // 1) SharePoint direto pelo site — funciona para todos com acesso à pasta
+  // 1) sharedWithMe — funciona para guests com pasta compartilhada diretamente
   try {
-    const { driveId } = await getSpDrive();
-    if (driveId && folder) {
-      const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      const fullPath = `${SP_BASE_PATH}/${cleanFolder}/${name}`;
-      const encodedPath = fullPath.split('/').map(s => encodeURIComponent(s)).join('/');
-      const d = await graphGet(`/drives/${driveId}/root:/${encodedPath}`);
-      return { id: d.id, driveId };
+    const s = await graphGet('/me/drive/sharedWithMe');
+    const items = s.value || [];
+    // Tenta achar o arquivo diretamente
+    const direct = items.find(f => f.name?.toLowerCase() === name.toLowerCase());
+    if (direct) {
+      const driveId = direct.remoteItem?.parentReference?.driveId || direct.parentReference?.driveId || null;
+      return { id: direct.remoteItem?.id || direct.id, driveId };
+    }
+    // Tenta navegar dentro de pasta compartilhada para achar o arquivo
+    for (const item of items) {
+      if (!item.folder) continue;
+      const driveId = item.remoteItem?.parentReference?.driveId || item.parentReference?.driveId || null;
+      const itemId  = item.remoteItem?.id || item.id;
+      if (!driveId) continue;
+      try {
+        const children = await graphGet(`/drives/${driveId}/items/${itemId}/search(q='${encodeURIComponent(name)}')`);
+        const found = (children.value||[]).find(f => f.name?.toLowerCase() === name.toLowerCase());
+        if (found) return { id: found.id, driveId };
+      } catch(e2) { /* tenta próxima pasta */ }
     }
   } catch(e) {
-    console.warn(`Busca SharePoint direto falhou: ${e.message}`);
+    console.warn(`sharedWithMe falhou: ${e.message}`);
   }
-  // 2) Path-based lookup no OneDrive pessoal
-  if (folder) {
-    const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
-    try {
-      const d = await graphGet(`/me/drive/root:/${encodedPath}/${encodeURIComponent(name)}`);
-      return { id: d.id, driveId: null };
-    } catch(e) {
-      console.warn(`Busca por caminho (OneDrive pessoal) falhou: ${e.message}`);
-    }
-  }
-  // 3) Microsoft Search API
+  // 2) Microsoft Search API — para usuários internos
   try {
     const r = await graphPost('/search/query', {
       requests: [{ entityTypes: ['driveItem'], query: { queryString: `"${name}"` } }]
@@ -1026,7 +1014,16 @@ async function findFile(name, folder) {
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
   }
-  throw new Error(`Arquivo "${name}" não encontrado no OneDrive.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
+  // 3) OneDrive pessoal
+  if (folder) {
+    const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
+    try {
+      const d = await graphGet(`/me/drive/root:/${encodedPath}/${encodeURIComponent(name)}`);
+      return { id: d.id, driveId: null };
+    } catch(e) { console.warn(`OneDrive pessoal falhou: ${e.message}`); }
+  }
+  throw new Error(`Arquivo "${name}" não encontrado.${folder ? ' Verifique o caminho da pasta na configuração.' : ''}`);
 }
 async function getSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return [];
