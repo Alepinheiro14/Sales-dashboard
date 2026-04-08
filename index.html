@@ -1549,7 +1549,7 @@ function renderTableControle() {
     const dSinal=col(r,'data_sinal','data sinal');
     const dAss  =col(r,'data_assinatura','data assinatura');
     const rowCls=isToday(dAss)?'today-venda':isToday(dSinal)?'today-reserva':'';
-    return `<tr${rowCls?` class="${rowCls}"`:''}
+    return `<tr${rowCls?` class="${rowCls}"`:''}>
       <td>${col(r,'competencia','competência','mes','mês')||'—'}</td>
       <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
       <td>${col(r,'corretor','broker','agente')||'—'}</td>
