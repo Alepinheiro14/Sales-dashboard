@@ -1027,11 +1027,12 @@ async function findFile(name, folder) {
 }
 async function getSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return [];
-  try {
-    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+  const basePath = driveItemPath(fileId);
+  // Helper to parse usedRange response into rows of objects
+  function parseUsedRange(d) {
     const rows = d.values||[];
+    console.log(`[getSheet] "${sheetName}": usedRange returned ${rows.length} rows`);
     if (rows.length < 2) return [];
-    // Encontra a linha de cabeçalho real — procura a linha que contém colunas conhecidas
     const knownCols = ['cliente','corretor','competencia','competência','status','lote','quadra','data','nome','imobiliaria','imobiliária'];
     let hdrIdx = 0;
     for (let i = 0; i < Math.min(rows.length - 1, 15); i++) {
@@ -1040,12 +1041,36 @@ async function getSheet(fileId, sheetName) {
       if (matches >= 2) { hdrIdx = i; break; }
     }
     const hdrs = rows[hdrIdx].map(h => nk(String(h)));
-    return rows.slice(hdrIdx + 1)
+    const result = rows.slice(hdrIdx + 1)
       .filter(row => row.some(c => c !== null && c !== '' && c !== undefined))
       .map(row => {
         const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
       });
-  } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
+    console.log(`[getSheet] "${sheetName}": parsed ${result.length} data rows, headers:`, hdrs.filter(Boolean).join(', '));
+    return result;
+  }
+  try {
+    const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    return parseUsedRange(d);
+  } catch(e) {
+    console.warn(`[getSheet] "${sheetName}" direto falhou (${e.message}), tentando listar abas...`);
+    // Fallback: list all worksheets and find by case-insensitive name
+    try {
+      const wsList = await graphGet(`${basePath}/workbook/worksheets`);
+      const available = (wsList.value||[]).map(w => w.name);
+      console.log(`[getSheet] Abas disponíveis no arquivo:`, available.join(', '));
+      const ws = available.find(n => n.toLowerCase() === sheetName.toLowerCase());
+      if (ws) {
+        const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(ws)}')/usedRange`);
+        return parseUsedRange(d);
+      } else {
+        console.error(`[getSheet] Aba "${sheetName}" não encontrada. Abas existentes:`, available.join(', '));
+      }
+    } catch(e2) {
+      console.error(`[getSheet] Fallback também falhou:`, e2.message);
+    }
+    return [];
+  }
 }
 
 async function getDaySheet(fileId, sheetName) {
