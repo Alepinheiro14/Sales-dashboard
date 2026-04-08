@@ -721,11 +721,9 @@
 // ═══════════════════════════════════════════
 const CLIENT_ID = "74b3a024-97bb-4bb0-89d7-0e59a9ef6dc2";
 const AUTHORITY = "https://login.microsoftonline.com/db8e9ec0-c54c-4dae-8641-91786f6850ea";
-const SCOPES_INTERNAL = ["Files.Read.All", "User.Read"];
-const SCOPES_EXTERNAL = ["Files.Read.All", "User.Read"];
+const SCOPES = ["Files.Read.All", "User.Read"];
 const SP_HOSTNAME = "urbansquarearquivos.sharepoint.com";
 const SP_BASE_PATH = "Documentos Compartilhados";
-const SCOPES = SCOPES_INTERNAL;
 
 const DEFAULTS = {
   nome:         "Ville de Provence",
@@ -840,7 +838,6 @@ function openConfig() {
 }
 function closeConfig() { document.getElementById('config-modal').classList.remove('open'); }
 function saveConfig() {
-  const s = (id, def) => { localStorage.setItem(id, document.getElementById(id.replace('cfg_','cfg-').replace('_','-')).value.trim() || def); };
   localStorage.setItem('cfg_nome',       document.getElementById('cfg-nome').value.trim()        || DEFAULTS.nome);
   localStorage.setItem('cfg_lotes',      document.getElementById('cfg-lotes').value               || DEFAULTS.totalLotes);
   localStorage.setItem('cfg_times',      document.getElementById('cfg-times').value.trim()        || DEFAULTS.refreshTimes);
@@ -872,10 +869,10 @@ async function signIn() {
     await getMsal().handleRedirectPromise();
     if (!getMsal().getAllAccounts().length) {
       if (isMobile) {
-        await getMsal().loginRedirect({ scopes: SCOPES_EXTERNAL, prompt: 'select_account' });
+        await getMsal().loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
         return;
       } else {
-        await getMsal().loginPopup({ scopes: SCOPES_EXTERNAL, prompt: 'select_account' });
+        await getMsal().loginPopup({ scopes: SCOPES, prompt: 'select_account' });
       }
     }
     initDashboard();
@@ -891,16 +888,15 @@ async function signOut() {
 async function getToken() {
   const a = getMsal().getAllAccounts();
   if (!a.length) throw new Error("Sessão expirada. Clique em Sair e entre novamente.");
-  const scopes = isExternalUser() ? SCOPES_EXTERNAL : SCOPES_INTERNAL;
   try {
-    return (await getMsal().acquireTokenSilent({ scopes, account: a[0] })).accessToken;
+    return (await getMsal().acquireTokenSilent({ scopes: SCOPES, account: a[0] })).accessToken;
   } catch(e) {
     try {
       if (isMobile) {
-        await getMsal().acquireTokenRedirect({ scopes, account: a[0] });
+        await getMsal().acquireTokenRedirect({ scopes: SCOPES, account: a[0] });
         return ''; // página vai recarregar
       }
-      return (await getMsal().acquireTokenPopup({ scopes, account: a[0] })).accessToken;
+      return (await getMsal().acquireTokenPopup({ scopes: SCOPES, account: a[0] })).accessToken;
     } catch(e2) {
       throw new Error("Sessão expirada. Por favor, faça login novamente.");
     }
@@ -931,28 +927,6 @@ function driveItemPath(fileRef) {
       : `/me/drive/items/${fileRef.id}`;
   }
   return `/me/drive/items/${fileRef}`;
-}
-const MSA_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad'; // Microsoft personal accounts tenant
-function isMSAUser() {
-  const accounts = getMsal().getAllAccounts();
-  if (!accounts.length) return false;
-  const account = accounts[0];
-  return account.tenantId === MSA_TENANT ||
-    (account.homeAccountId || '').includes(MSA_TENANT);
-}
-function isExternalUser() {
-  if (isMSAUser()) return true;
-  const accounts = getMsal().getAllAccounts();
-  if (!accounts.length) return false;
-  const account = accounts[0];
-  const homeTenantId = account.tenantId;
-  const homeAccountId = account.homeAccountId || '';
-  const parts = homeAccountId.split('.');
-  if (parts.length >= 2) {
-    const accountTenant = parts[parts.length - 1];
-    if (accountTenant && accountTenant !== homeTenantId) return true;
-  }
-  return false;
 }
 async function findFile(name, folder) {
   if (!name) return null;
@@ -1138,7 +1112,6 @@ function parseDate(val) {
   const d=new Date(s); return isNaN(d)?null:d;
 }
 function toDateStr(d) { return d?d.toISOString().split('T')[0]:''; }
-function todayStr()   { return toDateStr(new Date()); }
 function ptDate(val)  { const d=parseDate(val); return d?d.toLocaleDateString('pt-BR'):(val?String(val):'—'); }
 function fmtBRL(n)    {
   const v=parseNum(n);
@@ -1155,24 +1128,27 @@ function isValidComp(row) {
   const d = competenciaToDate(c);
   return d && d.getFullYear() >= 2020;
 }
-function filterByComp(row) {
-  if (!isValidComp(row)) return false;
-  const c=col(row,'competencia','competência','mes','mês');
-  const d=competenciaToDate(c);
-  const now=new Date();
-  if (currentFilter==='mes') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-  if (currentFilter==='mes_ant') { const p=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getMonth()===p.getMonth()&&d.getFullYear()===p.getFullYear(); }
+function isReservationYes(v) {
+  if (v===true || v===1) return true;
+  if (typeof v==='string') return ['sim','yes','1','true','x'].includes(v.trim().toLowerCase());
+  return false;
+}
+function matchesFilter(d) {
+  if (!d) return false;
+  const now = new Date();
+  if (currentFilter==='mes') return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+  if (currentFilter==='mes_ant') { const p=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getMonth()===p.getMonth() && d.getFullYear()===p.getFullYear(); }
   if (currentFilter==='ano') return d.getFullYear()===now.getFullYear();
   return true;
+}
+function filterByComp(row) {
+  if (!isValidComp(row)) return false;
+  return matchesFilter(competenciaToDate(col(row,'competencia','competência','mes','mês')));
 }
 function filterByDate(row) {
   const d=parseDate(col(row,'data','date'));
   if (!d) return currentFilter==='all';
-  const now=new Date();
-  if (currentFilter==='mes') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-  if (currentFilter==='mes_ant') { const p=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getMonth()===p.getMonth()&&d.getFullYear()===p.getFullYear(); }
-  if (currentFilter==='ano') return d.getFullYear()===now.getFullYear();
-  return true;
+  return matchesFilter(d);
 }
 function statusClass(st) {
   const s=String(st||'').toLowerCase();
@@ -1382,7 +1358,7 @@ function loadVisitasFileLocal(event) {
 // ── Load ─────────────────────────────────────
 async function loadData() {
   if (isLocalMode) { renderAll(); return; }
-  showLoading(true); hideError();
+  showLoading(true); document.getElementById('error-banner').style.display='none';
   try {
     const cfg = getCfg();
     const safeFind = (name, folder) => name
@@ -1739,18 +1715,21 @@ function renderChartVisitasTipo() {
   });
 }
 
-// ── Day selector (Tab 2) ─────────────────────
-function renderDaySelector() {
-  const strip = document.getElementById('day-strip');
-  const keys = Object.keys(allData.visitasDias).sort((a,b)=>dateFromDaySheet(a)-dateFromDaySheet(b));
+// ── Day selector (shared) ─────────────────────
+function renderDayStrip(stripId, dayData, selectedKey, onClickFn) {
+  const strip = document.getElementById(stripId);
   const today = todayDayKey();
+  const keys = Object.keys(dayData).sort((a,b)=>dateFromDaySheet(a)-dateFromDaySheet(b));
   strip.innerHTML = keys.map(k => {
     const d = dateFromDaySheet(k);
     const label = d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : k;
-    const isToday = k === today;
-    const isActive = k === selectedVisitDay;
-    return `<button class="day-btn${isActive?' active':''}${isToday?' is-today':''}" onclick="selectDay('${k}')">${label}${isToday?' ●':''}</button>`;
+    const isToday  = k === today;
+    const isActive = k === selectedKey;
+    return `<button class="day-btn${isActive?' active':''}${isToday?' is-today':''}" onclick="${onClickFn}('${k}')">${label}${isToday?' ●':''}</button>`;
   }).join('');
+}
+function renderDaySelector() {
+  renderDayStrip('day-strip', allData.visitasDias, selectedVisitDay, 'selectDay');
 }
 function selectDay(key) {
   selectedVisitDay = key;
@@ -1773,12 +1752,11 @@ function renderVisitasDia(key) {
   const rows = allData.visitasDias[key];
   const d = dateFromDaySheet(key);
   title.textContent = d ? `Visitas — ${d.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}` : `Visitas — ${key}`;
-  const reservas = rows.filter(r => { const v=col(r,'reserva'); return v===true||v===1||(typeof v==='string'&&['sim','yes','1','true'].includes(v.trim().toLowerCase())); }).length;
+  const reservas = rows.filter(r => isReservationYes(col(r,'reserva'))).length;
   meta.textContent = `${rows.length} visita${rows.length!==1?'s':''} · ${reservas} reserva${reservas!==1?'s':''}`;
   if (!rows.length) { tbody.innerHTML='<tr><td colspan="9" class="empty">Nenhuma visita registrada neste dia.</td></tr>'; return; }
   tbody.innerHTML = rows.map((r,i) => {
-    const reserva = col(r,'reserva');
-    const resOk = reserva===true || reserva===1 || (typeof reserva==='string' && ['sim','yes','1','true'].includes(String(reserva).trim().toLowerCase()));
+    const resOk = isReservationYes(col(r,'reserva'));
     return `<tr>
       <td style="color:var(--muted)">${i+1}</td>
       <td>${col(r,'corretor')||'—'}</td>
@@ -1940,16 +1918,7 @@ function renderChartLeadsOrigem() {
 }
 
 function renderLeadDaySelector() {
-  const strip = document.getElementById('leads-day-strip');
-  const today = todayDayKey();
-  const keys  = Object.keys(allData.leadsDias).sort((a,b) => dateFromDaySheet(a) - dateFromDaySheet(b));
-  strip.innerHTML = keys.map(k => {
-    const d = dateFromDaySheet(k);
-    const label = d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : k;
-    const isToday  = k === today;
-    const isActive = k === selectedLeadDay;
-    return `<button class="day-btn${isActive?' active':''}${isToday?' is-today':''}" onclick="selectLeadDay('${k}')">${label}${isToday?' ●':''}</button>`;
-  }).join('');
+  renderDayStrip('leads-day-strip', allData.leadsDias, selectedLeadDay, 'selectLeadDay');
 }
 function selectLeadDay(key) {
   selectedLeadDay = key;
@@ -2061,7 +2030,6 @@ function showLoading(on) {
   document.getElementById('dashboard').style.display=on?'none':'block';
 }
 function showError(msg) { const el=document.getElementById('error-banner'); el.textContent='⚠ '+msg; el.style.display='block'; }
-function hideError() { document.getElementById('error-banner').style.display='none'; }
 let _refreshTimer = null;
 
 function parseRefreshTimes(str) {
