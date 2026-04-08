@@ -1050,7 +1050,7 @@ async function getSheet(fileId, sheetName) {
     return result;
   }
   try {
-    const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange(valuesOnly=true)`);
     return parseUsedRange(d);
   } catch(e) {
     console.warn(`[getSheet] "${sheetName}" direto falhou (${e.message}), tentando listar abas...`);
@@ -1061,7 +1061,7 @@ async function getSheet(fileId, sheetName) {
       console.log(`[getSheet] Abas disponíveis no arquivo:`, available.join(', '));
       const ws = available.find(n => n.toLowerCase() === sheetName.toLowerCase());
       if (ws) {
-        const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(ws)}')/usedRange`);
+        const d = await graphGet(`${basePath}/workbook/worksheets('${encodeURIComponent(ws)}')/usedRange(valuesOnly=true)`);
         return parseUsedRange(d);
       } else {
         console.error(`[getSheet] Aba "${sheetName}" não encontrada. Abas existentes:`, available.join(', '));
@@ -1076,14 +1076,14 @@ async function getSheet(fileId, sheetName) {
 async function getDaySheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
   try {
-    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange(valuesOnly=true)`);
     return parseDaySheetRows(d.values || []);
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return { rows: [], counts: null }; }
 }
 async function getLeadSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
   try {
-    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange(valuesOnly=true)`);
     return parseLeadSheetRows(d.values || []);
   } catch(e) { console.warn(`Aba leads "${sheetName}":`, e.message); return { rows: [], counts: null }; }
 }
