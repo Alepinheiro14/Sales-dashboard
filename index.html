@@ -415,6 +415,7 @@
         <div class="card">
           <div class="card-title">Status das Vendas <span class="sub">total geral</span></div>
           <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+          <div id="donut-pct-label" style="text-align:center;margin-top:6px;font-size:13px;font-weight:700;color:#003621;letter-spacing:.01em;"></div>
         </div>
       </div>
 
@@ -776,38 +777,21 @@ const doughnutCenterPlugin = {
     const meta = chart.getDatasetMeta(0);
     if (!meta || !meta.data || !meta.data[0]) return;
     const total = chart.config.data.datasets[0].data.reduce((a,b)=>a+b,0);
-    const { ctx, canvas } = chart;
+    const { ctx } = chart;
     const cx = meta.data[0].x, cy = meta.data[0].y;
-    const totalLotes = getCfg().totalLotes || 582;
-    const pct = totalLotes > 0 ? Math.round(total / totalLotes * 100) : 0;
     const r = meta.data[0].innerRadius || 45;
-    // Font sizes scaled to inner radius
-    const sz1 = Math.min(28, Math.max(14, Math.floor(r * 0.52)));
-    const sz2 = Math.min(10, Math.max(7,  Math.floor(r * 0.18)));
-    const sz3 = Math.min(12, Math.max(8,  Math.floor(r * 0.22)));
-    const gap = Math.min(17, Math.max(10, Math.floor(r * 0.30)));
+    const sz1 = Math.min(30, Math.max(16, Math.floor(r * 0.58)));
+    const sz2 = Math.min(11, Math.max(8,  Math.floor(r * 0.20)));
+    const gap = sz1 * 0.6;
     ctx.save();
-    // Reset any clip Chart.js may have left active so text isn't cut off
-    ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.clip();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Line 1 — total
     ctx.fillStyle = '#191919';
     ctx.font = `bold ${sz1}px Segoe UI, system-ui, sans-serif`;
-    ctx.fillText(total, cx, cy - gap * 1.1);
-    // Line 2 — "vendas totais"
+    ctx.fillText(total, cx, cy - gap * 0.4);
     ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
     ctx.fillStyle = '#7A6E64';
-    ctx.fillText('vendas totais', cx, cy - gap * 0.05);
-    // Line 3 — pct%
-    ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
-    ctx.fillStyle = '#003621';
-    ctx.fillText(pct + '%', cx, cy + gap * 1.0);
-    // Line 4 — "do estoque"
-    ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
-    ctx.fillText('do estoque', cx, cy + gap * 1.9);
+    ctx.fillText('vendas totais', cx, cy + gap * 0.6);
     ctx.restore();
   }
 };
@@ -1550,6 +1534,11 @@ function renderChartStatus() {
       }
     }
   });
+  const totalLotes = getCfg().totalLotes || 582;
+  const total = Object.values(counts).reduce((a,b)=>a+b,0);
+  const pct = totalLotes > 0 ? Math.round(total / totalLotes * 100) : 0;
+  const lbl = document.getElementById('donut-pct-label');
+  if (lbl) lbl.textContent = `${pct}% do estoque comercializado`;
 }
 
 // ── Table: CONTROLE ───────────────────────────
