@@ -156,6 +156,12 @@
     tbody td { padding:9px 10px; border-bottom:1px solid var(--border); white-space:nowrap; color:var(--text); }
     tbody tr:last-child td { border-bottom:none; }
     tbody tr:hover td { background:var(--s2); }
+    tbody tr.today-reserva td { background:rgba(255,200,0,.15); }
+    tbody tr.today-venda td   { background:rgba(0,150,60,.13); }
+    tbody tr.today-perda td   { background:rgba(200,40,30,.12); }
+    tbody tr.today-reserva:hover td { background:rgba(255,200,0,.25); }
+    tbody tr.today-venda:hover td   { background:rgba(0,150,60,.20); }
+    tbody tr.today-perda:hover td   { background:rgba(200,40,30,.20); }
     .num { text-align:right; }
     .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
     .pill.f { background:rgba(0,54,33,.1);   color:var(--green); }
@@ -1112,6 +1118,11 @@ function parseDate(val) {
   const d=new Date(s); return isNaN(d)?null:d;
 }
 function toDateStr(d) { return d?d.toISOString().split('T')[0]:''; }
+function isToday(val) {
+  const d=parseDate(val); if (!d) return false;
+  const t=new Date();
+  return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();
+}
 function ptDate(val)  { const d=parseDate(val); return d?d.toLocaleDateString('pt-BR'):(val?String(val):'—'); }
 function fmtBRL(n)    {
   const v=parseNum(n);
@@ -1537,7 +1548,8 @@ function renderTableControle() {
     const sinal=parseNum(col(r,'sinal'));
     const dSinal=col(r,'data_sinal','data sinal');
     const dAss  =col(r,'data_assinatura','data assinatura');
-    return `<tr>
+    const rowCls=isToday(dAss)?'today-venda':isToday(dSinal)?'today-reserva':'';
+    return `<tr${rowCls?` class="${rowCls}"`:''}
       <td>${col(r,'competencia','competência','mes','mês')||'—'}</td>
       <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
       <td>${col(r,'corretor','broker','agente')||'—'}</td>
@@ -1571,7 +1583,8 @@ function renderTableReservas() {
     const vcc =parseNum(col(r,'valor_c_comissao','valor c/ comissão','valor_c/_comissao','valor c comissao'));
     const vsc =parseNum(col(r,'valor_s_comissao','valor s/ comissão','valor_s/_comissao','valor s comissao'));
     const data=col(r,'data','date','data_reserva');
-    return `<tr>
+    const rowCls=isToday(data)?'today-reserva':'';
+    return `<tr${rowCls?` class="${rowCls}"`:''}>
       <td>${data?ptDate(data):'—'}</td>
       <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
       <td>${col(r,'imobiliaria','imobiliária','imobiliarias','agency')||'—'}</td>
@@ -1589,14 +1602,16 @@ function renderTableReservas() {
 
 // ── Table: PERDAS ─────────────────────────────
 function renderTablePerdas() {
-  const filt=allData.perdas.filter(filterByDate);
+  const filt=allData.perdas.filter(filterByDate)
+    .sort((a,b)=>(parseDate(col(b,'data','date'))||0)-(parseDate(col(a,'data','date'))||0));
   document.getElementById('perdas-meta').textContent=`${filt.length} perda${filt.length!==1?'s':''} no período`;
   const tbody=document.getElementById('tbody-perdas');
   if (!filt.length) { tbody.innerHTML='<tr><td colspan="6" class="empty">Sem perdas no período.</td></tr>'; return; }
   tbody.innerHTML=filt.map(r=>{
     const data=col(r,'data','date');
     const motivo=col(r,'motivo','reason','observacao','observação')||'—';
-    return `<tr>
+    const rowCls=isToday(data)?'today-perda':'';
+    return `<tr${rowCls?` class="${rowCls}"`:''}>
       <td>${data?ptDate(data):'—'}</td>
       <td><strong>${col(r,'cliente','client','nome')||'—'}</strong></td>
       <td>${col(r,'imob','imobiliaria','imobiliária','agency')||'—'}</td>
