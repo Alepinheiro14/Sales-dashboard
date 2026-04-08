@@ -1048,10 +1048,21 @@ async function getSheet(fileId, sheetName) {
 
 async function getDaySheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
-  try {
-    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange(valuesOnly=true)`);
+  const enc = encodeURIComponent(sheetName);
+  const tryPath = async (base) => {
+    const d = await graphGet(`${base}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)`);
     return parseDaySheetRows(d.values || []);
-  } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return { rows: [], counts: null }; }
+  };
+  try {
+    return await tryPath(driveItemPath(fileId));
+  } catch(e) {
+    console.warn(`Aba "${sheetName}" (primário):`, e.message);
+    if (fileId && typeof fileId === 'object' && fileId.driveId && fileId.id) {
+      try { return await tryPath(`/me/drive/items/${fileId.id}`); }
+      catch(e2) { console.warn(`Aba "${sheetName}" (fallback):`, e2.message); }
+    }
+    return { rows: [], counts: null };
+  }
 }
 async function getLeadSheet(fileId, sheetName) {
   if (!fileId || !sheetName) return { rows: [], counts: null };
@@ -1062,10 +1073,24 @@ async function getLeadSheet(fileId, sheetName) {
 }
 async function getSheetNames(fileId) {
   if (!fileId) return [];
+  const primaryPath = driveItemPath(fileId);
+  console.log('[getSheetNames] fileId:', JSON.stringify(fileId), '→ path:', primaryPath);
   try {
-    const d = await graphGet(`${driveItemPath(fileId)}/workbook/worksheets`);
+    const d = await graphGet(`${primaryPath}/workbook/worksheets`);
     return (d.value||[]).map(ws => ws.name);
-  } catch(e) { console.warn('Erro ao listar abas:', e.message); return []; }
+  } catch(e) {
+    console.warn('Erro ao listar abas (caminho primário):', e.message);
+    // Fallback: se o fileId tem driveId mas o caminho falhou, tenta sem driveId
+    if (fileId && typeof fileId === 'object' && fileId.driveId && fileId.id) {
+      const fallbackPath = `/me/drive/items/${fileId.id}`;
+      console.log('[getSheetNames] tentando fallback:', fallbackPath);
+      try {
+        const d2 = await graphGet(`${fallbackPath}/workbook/worksheets`);
+        return (d2.value||[]).map(ws => ws.name);
+      } catch(e2) { console.warn('Erro ao listar abas (fallback):', e2.message); }
+    }
+    return [];
+  }
 }
 
 // ── Helpers ──────────────────────────────────
@@ -1380,6 +1405,9 @@ async function loadData() {
       safeFind(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)),
       safeFind(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3))
     ]);
+    console.log('[loadData] fid1 (controle):', JSON.stringify(fid1));
+    console.log('[loadData] fid2 (visitas):', JSON.stringify(fid2), '| cfg.fileVisitas:', cfg.fileVisitas);
+    console.log('[loadData] fid3 (leads):', JSON.stringify(fid3), '| cfg.fileLeads:', cfg.fileLeads);
     const controle = await getSheet(fid1, cfg.sheetControle);
     const reservas = await getSheet(fid1, cfg.sheetReservas);
     const perdas   = await getSheet(fid1, cfg.sheetPerdas);
