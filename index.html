@@ -781,24 +781,32 @@ const doughnutCenterPlugin = {
     const totalLotes = getCfg().totalLotes || 582;
     const pct = totalLotes > 0 ? Math.round(total / totalLotes * 100) : 0;
     // Scale font sizes based on chart radius
-    const radius = meta.data[0].outerRadius || 80;
-    const scale = Math.max(0.55, Math.min(1, radius / 80));
+    const innerRadius = meta.data[0].innerRadius || 50;
+    const avail = innerRadius * 1.7; // max text width (with padding)
+    const scale = Math.max(0.5, Math.min(1, innerRadius / 50));
     const sz1 = Math.round(30 * scale);
-    const sz2 = Math.round(11 * scale);
-    const sz3 = Math.round(13 * scale);
-    const gap = Math.round(18 * scale);
+    const sz2 = Math.round(10 * scale);
+    let   sz3 = Math.round(13 * scale);
+    const gap = Math.round(16 * scale);
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    // Shrink pct font until it fits the inner hole
+    const pctLabel = pct + '% do estoque';
+    ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
+    while (sz3 > 6 && ctx.measureText(pctLabel).width > avail) {
+      sz3--;
+      ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
+    }
     ctx.fillStyle = '#191919';
     ctx.font = `bold ${sz1}px Segoe UI, system-ui, sans-serif`;
-    ctx.fillText(total, cx, cy - gap * 0.6);
+    ctx.fillText(total, cx, cy - gap * 0.7);
     ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
     ctx.fillStyle = '#7A6E64';
-    ctx.fillText('vendas totais', cx, cy + gap * 0.4);
+    ctx.fillText('vendas totais', cx, cy + gap * 0.3);
     ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
     ctx.fillStyle = '#003621';
-    ctx.fillText(pct + '% do estoque', cx, cy + gap * 1.4);
+    ctx.fillText(pctLabel, cx, cy + gap * 1.4);
     ctx.restore();
   }
 };
