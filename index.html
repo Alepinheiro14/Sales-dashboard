@@ -1040,9 +1040,11 @@ async function getSheet(fileId, sheetName) {
       if (matches >= 2) { hdrIdx = i; break; }
     }
     const hdrs = rows[hdrIdx].map(h => nk(String(h)));
-    return rows.slice(hdrIdx + 1).map(row => {
-      const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
-    });
+    return rows.slice(hdrIdx + 1)
+      .filter(row => row.some(c => c !== null && c !== '' && c !== undefined))
+      .map(row => {
+        const o={}; hdrs.forEach((h,i) => { if(h) o[h]=row[i]??''; }); return o;
+      });
   } catch(e) { console.warn(`Aba "${sheetName}":`, e.message); return []; }
 }
 
@@ -1373,11 +1375,9 @@ async function loadData() {
       safeFind(cfg.fileVisitas, effectiveFolder(cfg, cfg.folder2)),
       safeFind(cfg.fileLeads,   effectiveFolder(cfg, cfg.folder3))
     ]);
-const [controle, reservas, perdas] = await Promise.all([
-      getSheet(fid1, cfg.sheetControle),
-      getSheet(fid1, cfg.sheetReservas),
-      getSheet(fid1, cfg.sheetPerdas)
-    ]);
+    const controle = await getSheet(fid1, cfg.sheetControle);
+    const reservas = await getSheet(fid1, cfg.sheetReservas);
+    const perdas   = await getSheet(fid1, cfg.sheetPerdas);
     // Load visitas: discover DD.MM.YYYY sheets, extract visits + embedded counts from each
     let visitasDias = {}, contagensByDay = {};
     if (fid2) {
@@ -1828,7 +1828,7 @@ function renderLeadKPIs() {
     : Object.keys(allData.leadsDias).sort((a,b)=>dateFromDaySheet(b)-dateFromDaySheet(a))
         .find(k=>{ const d=dateFromDaySheet(k); return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
   const todayRows = allData.leadsDias[refKey] || [];
-  const intHoje   = todayRows.filter(r => { const v = col(r,'retorno_1'); return v && String(v).trim() !== ''; }).length;
+  const intHoje   = todayRows.filter(r => String(col(r,'retorno_1')).trim().toLowerCase() === 'com retorno').length;
   const contagemHoje = allData.leadsContagensByDay[refKey]?.totalContatos;
   document.getElementById('kpi-leads-hoje').textContent = (contagemHoje > 0 ? contagemHoje : null) ?? todayRows.length;
   document.getElementById('kpi-leads-int-hoje').textContent = intHoje;
