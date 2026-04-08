@@ -776,47 +776,38 @@ const doughnutCenterPlugin = {
     const meta = chart.getDatasetMeta(0);
     if (!meta || !meta.data || !meta.data[0]) return;
     const total = chart.config.data.datasets[0].data.reduce((a,b)=>a+b,0);
-    const { ctx } = chart;
+    const { ctx, canvas } = chart;
     const cx = meta.data[0].x, cy = meta.data[0].y;
     const totalLotes = getCfg().totalLotes || 582;
     const pct = totalLotes > 0 ? Math.round(total / totalLotes * 100) : 0;
-    // Scale font sizes based on chart radius
-    const innerRadius = meta.data[0].innerRadius || 50;
-    const avail = innerRadius * 1.75;
-    const scale = Math.max(0.5, Math.min(1, innerRadius / 50));
-    const sz1 = Math.round(30 * scale);
-    const sz2 = Math.round(10 * scale);
-    const sz3 = Math.round(13 * scale);
-    const gap = Math.round(16 * scale);
+    const r = meta.data[0].innerRadius || 45;
+    // Font sizes scaled to inner radius
+    const sz1 = Math.min(28, Math.max(14, Math.floor(r * 0.52)));
+    const sz2 = Math.min(10, Math.max(7,  Math.floor(r * 0.18)));
+    const sz3 = Math.min(12, Math.max(8,  Math.floor(r * 0.22)));
+    const gap = Math.min(17, Math.max(10, Math.floor(r * 0.30)));
     ctx.save();
+    // Reset any clip Chart.js may have left active so text isn't cut off
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.clip();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const pctLabel = pct + '% do estoque';
-    ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
-    const twoLines = ctx.measureText(pctLabel).width > avail;
+    // Line 1 — total
     ctx.fillStyle = '#191919';
     ctx.font = `bold ${sz1}px Segoe UI, system-ui, sans-serif`;
-    if (twoLines) {
-      // 4-line layout for small screens
-      ctx.fillText(total, cx, cy - gap * 1.2);
-      ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
-      ctx.fillStyle = '#7A6E64';
-      ctx.fillText('vendas totais', cx, cy - gap * 0.1);
-      ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
-      ctx.fillStyle = '#003621';
-      ctx.fillText(pct + '%', cx, cy + gap * 1.0);
-      ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
-      ctx.fillText('do estoque', cx, cy + gap * 2.0);
-    } else {
-      // 3-line layout for desktop
-      ctx.fillText(total, cx, cy - gap * 0.7);
-      ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
-      ctx.fillStyle = '#7A6E64';
-      ctx.fillText('vendas totais', cx, cy + gap * 0.3);
-      ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
-      ctx.fillStyle = '#003621';
-      ctx.fillText(pctLabel, cx, cy + gap * 1.4);
-    }
+    ctx.fillText(total, cx, cy - gap * 1.1);
+    // Line 2 — "vendas totais"
+    ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
+    ctx.fillStyle = '#7A6E64';
+    ctx.fillText('vendas totais', cx, cy - gap * 0.05);
+    // Line 3 — pct%
+    ctx.font = `bold ${sz3}px Segoe UI, system-ui, sans-serif`;
+    ctx.fillStyle = '#003621';
+    ctx.fillText(pct + '%', cx, cy + gap * 1.0);
+    // Line 4 — "do estoque"
+    ctx.font = `${sz2}px Segoe UI, system-ui, sans-serif`;
+    ctx.fillText('do estoque', cx, cy + gap * 1.9);
     ctx.restore();
   }
 };
