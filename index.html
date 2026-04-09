@@ -968,6 +968,29 @@ async function findFile(name, folder) {
     });
     const hits = (r.value?.[0]?.hitsContainers?.[0]?.hits || [])
       .filter(h => h.resource?.name?.toLowerCase() === name.toLowerCase());
+    // Helper: resolve a search hit to a canonical drive item via /shares/ (webUrl encoding)
+    // IDs from Microsoft Search can differ from what the workbook API needs
+    async function resolveHit(hit) {
+      const webUrl = hit.resource.webUrl;
+      if (webUrl) {
+        try {
+          const encoded = 'u!' + btoa(unescape(encodeURIComponent(webUrl)))
+            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+          const item = await graphGet(`/shares/${encoded}/driveItem`);
+          console.log('[findFile] resolved via /shares/ webUrl:', item.id);
+          return { id: item.id, driveId: item.parentReference?.driveId || null };
+        } catch(e) { console.warn('[findFile] /shares/ resolve falhou:', e.message); }
+      }
+      // Fallback: try re-fetching via drive path to normalise the ID
+      const driveId = hit.resource.parentReference?.driveId;
+      if (driveId && hit.resource.id) {
+        try {
+          const item = await graphGet(`/drives/${driveId}/items/${hit.resource.id}`);
+          return { id: item.id, driveId };
+        } catch(e) { /* ignored */ }
+      }
+      return { id: hit.resource.id, driveId: driveId || null };
+    }
     if (hits.length && folder) {
       const cleanFolder = folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
       const encodedPath = cleanFolder.split('/').map(s => encodeURIComponent(s)).join('/');
@@ -981,8 +1004,7 @@ async function findFile(name, folder) {
       }
     }
     if (hits.length) {
-      const hit = hits[0];
-      return { id: hit.resource.id, driveId: hit.resource.parentReference?.driveId || null };
+      return await resolveHit(hits[0]);
     }
   } catch(e) {
     console.warn(`Microsoft Search falhou: ${e.message}`);
