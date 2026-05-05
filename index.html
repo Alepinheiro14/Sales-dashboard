@@ -167,6 +167,7 @@
     .pill.f { background:rgba(0,54,33,.1);   color:var(--green); }
     .pill.a { background:rgba(126,55,123,.1); color:var(--gold); }
     .pill.r { background:rgba(181,126,220,.15); color:#7B3FAD; }
+    .pill.p { background:rgba(21,101,163,.12); color:#1565a3; }
     .pill.c { background:rgba(179,58,42,.1);  color:var(--red); }
     .empty { color:var(--muted); text-align:center; padding:36px; }
 
@@ -1213,6 +1214,7 @@ function statusClass(st) {
   if (s.includes('final'))  return 'f';
   if (s.includes('assina')) return 'a';
   if (s.includes('reserv')) return 'r';
+  if (s.includes('pago'))   return 'p';
   return 'c';
 }
 
@@ -1535,7 +1537,7 @@ function renderChartMonthly() {
     months.push({ label: new Date(d).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}), date: new Date(d) });
   }
   const mkSeries = (kw, color) => ({
-    label: kw==='final'?'Finalizados':'Assinados',
+    label: kw==='final'?'Finalizados':kw==='pago'?'Pagos':'Assinados',
     backgroundColor: color, borderRadius: 3, stack: 'a',
     data: months.map(m => controle.filter(r=>{
       if (!isValidComp(r)) return false;
@@ -1547,7 +1549,7 @@ function renderChartMonthly() {
   const ctx=document.getElementById('chart-monthly').getContext('2d');
   charts.monthly=new Chart(ctx,{
     type:'bar',
-    data:{ labels:months.map(m=>m.label), datasets:[mkSeries('final','#003621'),mkSeries('assina','#7E377B')] },
+    data:{ labels:months.map(m=>m.label), datasets:[mkSeries('final','#003621'),mkSeries('assina','#7E377B'),mkSeries('pago','#1565a3')] },
     options: barOpts(true)
   });
 }
