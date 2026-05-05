@@ -167,7 +167,7 @@
     .pill.f { background:rgba(0,54,33,.1);   color:var(--green); }
     .pill.a { background:rgba(126,55,123,.1); color:var(--gold); }
     .pill.r { background:rgba(181,126,220,.15); color:#7B3FAD; }
-    .pill.p { background:rgba(21,101,163,.12); color:#1565a3; }
+    .pill.p { background:rgba(181,126,220,.15); color:#7B3FAD; }
     .pill.c { background:rgba(179,58,42,.1);  color:var(--red); }
     .empty { color:var(--muted); text-align:center; padding:36px; }
 
@@ -175,7 +175,9 @@
     #config-modal { display:none; position:fixed; inset:0; background:rgba(25,25,25,.5); z-index:100; align-items:center; justify-content:center; }
     #config-modal.open { display:flex; }
     .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:30px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,.15); }
-    .modal-box h2 { font-size:17px; font-weight:600; margin-bottom:4px; color:var(--text); }
+    .modal-box h2 { font-size:17px; font-weight:600; margin-bottom:4px; color:var(--text); display:flex; align-items:center; justify-content:space-between; }
+    .modal-close-x { background:none; border:none; font-size:18px; color:var(--muted); cursor:pointer; padding:0 2px; line-height:1; }
+    .modal-close-x:hover { color:var(--text); }
     .modal-box .modal-intro { font-size:13px; color:var(--muted); margin-bottom:18px; }
     .modal-sep { font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:.08em; margin-top:22px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
     .field-label { display:block; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px; margin-top:12px; }
@@ -663,9 +665,9 @@
 </div>
 
 <!-- ══ CONFIG MODAL ══ -->
-<div id="config-modal">
+<div id="config-modal" onclick="if(event.target===this)closeConfig()">
   <div class="modal-box">
-    <h2>⚙ Configuração</h2>
+    <h2>⚙ Configuração <button class="modal-close-x" onclick="closeConfig()">✕</button></h2>
     <div class="modal-intro">Defina os arquivos Excel e nomes das abas conforme sua planilha no OneDrive.</div>
 
     <div class="modal-sep">Empreendimento</div>
@@ -1549,7 +1551,7 @@ function renderChartMonthly() {
   const ctx=document.getElementById('chart-monthly').getContext('2d');
   charts.monthly=new Chart(ctx,{
     type:'bar',
-    data:{ labels:months.map(m=>m.label), datasets:[mkSeries('final','#003621'),mkSeries('assina','#7E377B'),mkSeries('pago','#1565a3')] },
+    data:{ labels:months.map(m=>m.label), datasets:[mkSeries('final','#003621'),mkSeries('assina','#7E377B'),mkSeries('pago','#B57EDC')] },
     options: barOpts(true)
   });
 }
@@ -2150,6 +2152,8 @@ function initDashboard() {
 }
 
 // ── Init ──────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfig(); });
+
 (async()=>{
   applyBranding();
   if (CLIENT_ID==="YOUR_CLIENT_ID_HERE") return;
